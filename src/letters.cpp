@@ -1,244 +1,368 @@
 #include "letters.h"
-#include "config.h"
 #include "display.h"
-#include <math.h>
+#include "poetry_layout.h"
+#include "poetry_motion.h"
+#include <font/glcdfont.h>
+#include <algorithm>
 
-struct Letter {
-  char ch;
-  char targetCh;
-  float x, y;
-  float vx, vy;
-  float homeX, homeY;
-  float tx, ty;
-  float phase;
-  float spawn;
-  uint8_t size;
-  bool alive;
-  bool useTargetGlyph;
+namespace {
+enum Phase : uint8_t { MOVING, ASSEMBLING, READING, DISSOLVING };
+struct Particle {
+  uint16_t offset;
+  uint8_t length;
+  bool echo;
+  float blend;
+  float targetX, targetY;
+  WordPose pose;
+  float anchorX, anchorY, anchorZ;
 };
+struct Scene {
+  PoetryLayout layout;
+  const Poem *poem = nullptr;
+  const MotionPreset *motion = nullptr;
+  Particle particles[POETRY_MAX_CHARS];
+  int count = 0, realCount = 0;
+  uint8_t resolvedLayout = 0;
+  uint32_t seed = 0;
+  float time = 0;
+  bool valid = false;
+};
+struct DrawItem { uint16_t particle; Scene *scene; };
+Scene scenes[2];
+Scene *current = &scenes[0], *incoming = &scenes[1];
+DrawItem order[POETRY_MAX_CHARS * 2];
+Phase phase = MOVING;
+float transitionTime = 0, progress = 0, eased = 0;
+bool nextReady = false;
 
-static Letter L[MAX_LETTERS];
-static int nL = 0;
-static char quoteCopy[192];
-static uint32_t scatterMs = 0;
-static bool scatterOn = false;
-static bool regroupOn = false;
-
-static uint32_t rng = 1;
-static uint32_t rnd() {
-  rng = rng * 1664525u + 1013904223u;
-  return rng;
+float clamp01(float n) { return n < 0 ? 0 : n > 1 ? 1 : n; }
+float angle(float a) { return atan2f(sinf(a), cosf(a)); }
+float unwrapped(float a, float anchor) { return anchor + angle(a - anchor); }
+uint16_t grey(float amount) {
+  const int g = (int)(clamp01(amount) * 255);
+  return ((g >> 3) << 11) | ((g >> 2) << 5) | (g >> 3);
+}
+float shade(const Scene &scene, const WordPose &pose) {
+  const float range = fmaxf(scene.motion->depth, 1);
+  return .12f + .84f * powf(clamp01(.5f + pose.z / (2 * range)), 1.35f);
 }
 
-static void addLetter(char ch, float x, float y, uint8_t size) {
-  if (nL >= MAX_LETTERS) return;
-  Letter &e = L[nL++];
-  e.ch = ch;
-  e.targetCh = ch;
-  e.x = e.homeX = x;
-  e.y = e.homeY = y;
-  e.tx = x;
-  e.ty = y;
-  e.vx = e.vy = 0;
-  e.size = size;
-  e.alive = true;
-  e.useTargetGlyph = false;
-  e.phase = nL * 0.37f;
-  e.spawn = 0;
+WordPose movingPose(const Scene &scene, int index) {
+  return poetryFieldMotion(*scene.motion, index, scene.count, scene.time,
+                           scene.particles[index].length * 6, scene.seed);
 }
 
-void lettersLoadQuote(const char *text) {
-  strncpy(quoteCopy, text, sizeof(quoteCopy) - 1);
-  quoteCopy[sizeof(quoteCopy) - 1] = 0;
-  nL = 0;
-  scatterOn = regroupOn = false;
-  rng = 0xA5A5u * (uint32_t)(strlen(text) + 3);
-
-  uint8_t size = strlen(text) > 28 ? 1 : 2;
-  int charW = 6 * size;
-  int charH = 8 * size;
-  int y = 36;
-  const char *p = text;
-
-  while (*p && nL < MAX_LETTERS - 24) {
-    while (*p == ' ') p++;
-    if (!*p) break;
-    const char *w = p;
-    while (*p && *p != ' ') p++;
-    int wlen = (int)(p - w);
-    int ww = wlen * charW;
-    int indent = 10 + (int)(rnd() % 9) * 6;
-    if (indent + ww > LCD_W - 8) indent = 8;
-    if ((rnd() % 5) == 0) y += charH / 2;
-    if (y + charH > LCD_H - 44) {
-      y = 32 + (int)(nL % 6) * 2;
-      indent = 16 + (int)(nL % 8) * 4;
+bool prepare(Scene &scene, const Poem &poem, const MotionPreset &motion) {
+  const int previousLayout = current->valid ? current->resolvedLayout : -1;
+  scene.poem = &poem;
+  scene.motion = &motion;
+  scene.time = 0;
+  const uint32_t seedHigh = (uint32_t)random(65536);
+  const uint32_t seedLow = (uint32_t)random(65536);
+  scene.seed = (seedHigh << 16) | seedLow;
+  scene.count = 0;
+  scene.resolvedLayout = poem.layout;
+  if (poem.layout == 8) {
+    uint8_t eligible[12];
+    int count = 0;
+    for (uint8_t choice = 0; choice <= 12; choice++)
+      if (choice != 8 && poetryLayout(poem.text, scene.layout, choice)) eligible[count++] = choice;
+    if (count > 1) {
+      for (int i = 0; i < count; i++) if (eligible[i] == previousLayout) {
+        for (int j = i; j < count - 1; j++) eligible[j] = eligible[j + 1];
+        count--;
+        break;
+      }
     }
-    for (int i = 0; i < wlen; i++) {
-      float jx = (int)(rnd() % 5) - 2;
-      float jy = (int)(rnd() % 5) - 2;
-      addLetter(w[i], indent + i * charW + jx, y + jy, size);
+    if (count) scene.resolvedLayout = eligible[random(count)];
+  }
+  scene.valid = poetryLayout(poem.text, scene.layout, scene.resolvedLayout);
+  if (!scene.valid) {
+    Serial.printf("Poem cannot fit screen: %s\n", poem.id);
+    return false;
+  }
+  bool wholeWords[POETRY_MAX_WORDS] = {};
+  int eligibleWords = 0, wholeCount = 0, firstEligible = -1, lastEligible = -1;
+  for (int i = 0; i < scene.layout.count; i++) {
+    if (scene.layout.words[i].length <= 1) continue;
+    if (firstEligible < 0) firstEligible = i;
+    lastEligible = i;
+    eligibleWords++;
+    wholeWords[i] = poetryRandom(scene.seed, i, 35) > .62f;
+    if (wholeWords[i]) wholeCount++;
+  }
+  if (motion.unit == 2 && eligibleWords >= 2) {
+    if (wholeCount == 0) wholeWords[firstEligible] = true;
+    if (wholeCount == eligibleWords) wholeWords[lastEligible] = false;
+  }
+  for (int i = 0; i < scene.layout.count; i++) {
+    const PoetryWord &word = scene.layout.words[i];
+    const bool whole = motion.unit == 1 || (motion.unit == 2 && wholeWords[i]);
+    const int groups = whole ? 1 : word.length;
+    for (int c = 0; c < groups; c++) {
+      Particle &p = scene.particles[scene.count++];
+      p.offset = word.offset + (whole ? 0 : c);
+      p.length = whole ? word.length : 1;
+      p.targetX = whole ? word.x : word.x - word.length * 3 + c * 6 + 3;
+      p.targetY = word.y;
+      p.echo = false;
+      p.blend = 0;
+      p.anchorX = p.anchorY = p.anchorZ = 0;
     }
-    y += charH + 6 + (int)(rnd() % 10);
   }
-
-  int orig = nL;
-  if (orig == 0) {
-    addLetter('?', 110, 140, 2);
-    orig = 1;
-  }
-  int i = 0;
-  while (nL < 24) {
-    Letter src = L[i % orig];
-    addLetter(src.ch, src.homeX + (int)(rnd() % 7) - 3,
-              src.homeY + (int)(rnd() % 7) - 3, src.size);
-    i++;
-  }
-}
-
-void lettersStartScatter(float speedPx) {
-  scatterOn = true;
-  regroupOn = false;
-  scatterMs = millis();
-  const float cx = LCD_W / 2.f, cy = LCD_H / 2.f;
-  for (int i = 0; i < nL; i++) {
-    float dx = L[i].x - cx;
-    float dy = L[i].y - cy;
-    float len = sqrtf(dx * dx + dy * dy);
-    if (len < 1.f) {
-      float a = (rnd() % 628) / 100.f;
-      dx = cosf(a);
-      dy = sinf(a);
-      len = 1.f;
+  scene.realCount = scene.count;
+  while (scene.count < 180 && scene.count < POETRY_MAX_CHARS) {
+    Particle &echo = scene.particles[scene.count];
+    const int source = (int)(poetryRandom(scene.seed, scene.count, 37) * scene.realCount);
+    echo = scene.particles[source < scene.realCount ? source : scene.realCount - 1];
+    echo.echo = true;
+    if (motion.unit != 0 && poetryRandom(scene.seed, scene.count, 38) < .68f) {
+      const int oldOffset = echo.offset, oldLength = echo.length;
+      int maxRun = 0;
+      while (maxRun < 18 && poem.text[oldOffset + maxRun]
+             && poem.text[oldOffset + maxRun] != '\n') maxRun++;
+      const int skipRange = oldLength < 4 ? oldLength : 4;
+      const int skip = (int)(poetryRandom(scene.seed, scene.count, 39) * skipRange);
+      int offset = oldOffset + skip;
+      maxRun -= skip;
+      const int maxLength = maxRun < 14 ? maxRun : 14;
+      int length = 1 + (int)(poetryRandom(scene.seed, scene.count, 40) * maxLength);
+      while (length > 0 && poem.text[offset] == ' ') { offset++; length--; }
+      while (length > 0 && poem.text[offset + length - 1] == ' ') length--;
+      if (length > 0) {
+        echo.offset = offset;
+        echo.length = length;
+        echo.targetX += (offset - oldOffset) * 6 + (length - oldLength) * 3;
+      }
     }
-    float sp = speedPx * (0.65f + (rnd() % 80) / 100.f);
-    L[i].vx = dx / len * sp;
-    L[i].vy = dy / len * sp;
-    L[i].useTargetGlyph = false;
+    scene.count++;
+  }
+  for (int i = 0; i < scene.count; i++)
+    scene.particles[i].pose = movingPose(scene, i);
+  return true;
+}
+void captureAnchors(Scene &scene) {
+  for (int i = 0; i < scene.count; i++) {
+    Particle &p = scene.particles[i];
+    const WordPose dynamic = movingPose(scene, i);
+    p.anchorX = angle(dynamic.rx);
+    p.anchorY = angle(dynamic.ry);
+    p.anchorZ = angle(dynamic.rz);
   }
 }
 
-void lettersUpdateScatter(float dt) {
-  if (!scatterOn) return;
-  for (int i = 0; i < nL; i++) {
-    L[i].x += L[i].vx * dt;
-    L[i].y += L[i].vy * dt;
+void drawPixelQuad(const Scene &scene, const WordPose &v, const WordBasis &basis,
+                   float x0, float y0, float x1, float y1, uint16_t color) {
+  float x[4], y[4];
+  if (!poetryProject(v, basis, x0, y0, scene.motion->perspective, x[0], y[0]) ||
+      !poetryProject(v, basis, x1, y0, scene.motion->perspective, x[1], y[1]) ||
+      !poetryProject(v, basis, x1, y1, scene.motion->perspective, x[2], y[2]) ||
+      !poetryProject(v, basis, x0, y1, scene.motion->perspective, x[3], y[3])) return;
+  float left = x[0], right = x[0], top = y[0], bottom = y[0];
+  for (int i = 1; i < 4; i++) {
+    left = fminf(left, x[i]); right = fmaxf(right, x[i]);
+    top = fminf(top, y[i]); bottom = fmaxf(bottom, y[i]);
   }
+  if (right < 0 || left >= LCD_W || bottom < 0 || top >= LCD_H) return;
+  // Arduino's triangle rasterizer includes both end pixels. Pull each edge
+  // inward before flooring so an identity 1x1 glyph cell draws one pixel,
+  // matching the crisp built-in glyph used after assembly instead of thickening.
+  const float cx = (x[0] + x[1] + x[2] + x[3]) * .25f;
+  const float cy = (y[0] + y[1] + y[2] + y[3]) * .25f;
+  for (int i = 0; i < 4; i++) {
+    x[i] = floorf(fmaxf(-1024, fminf(1024, x[i] + (cx - x[i]) * .01f)));
+    y[i] = floorf(fmaxf(-1024, fminf(1024, y[i] + (cy - y[i]) * .01f)));
+  }
+  gfx->fillTriangle((int)x[0], (int)y[0], (int)x[1], (int)y[1],
+                    (int)x[2], (int)y[2], color);
+  gfx->fillTriangle((int)x[0], (int)y[0], (int)x[2], (int)y[2],
+                    (int)x[3], (int)y[3], color);
 }
-
-bool lettersScatterDone() {
-  if (!scatterOn) return true;
-  if (millis() - scatterMs >= SCATTER_MS) return true;
-  int far = 0;
-  const float cx = LCD_W / 2.f, cy = LCD_H / 2.f;
-  for (int i = 0; i < nL; i++) {
-    float dx = L[i].x - cx, dy = L[i].y - cy;
-    if (dx * dx + dy * dy > 170.f * 170.f) far++;
+void drawParticle(const Scene &scene, int index, uint16_t color) {
+  const Particle &p = scene.particles[index];
+  const WordPose &v = p.pose;
+  const float width = p.length * 6;
+  if (phase == READING) {
+    gfx->setTextSize(1);
+    gfx->setTextColor(color);
+    gfx->setCursor((int)(120 + v.x - width / 2), (int)(160 + v.y - 4));
+    for (int c = 0; c < p.length; c++) gfx->write((uint8_t)scene.poem->text[p.offset + c]);
+    return;
   }
-  return far > nL * 2 / 3;
-}
-
-void lettersStartClock() {
-  scatterOn = false;
-  regroupOn = true;
-  static const char *labs[12] = {
-      "12", "01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11"};
-  const float cx = LCD_W / 2.f, cy = 138.f, r = 96.f;
-
-  struct Tgt { char ch; float x, y; };
-  Tgt t[24];
-  int nt = 0;
-  for (int i = 0; i < 12; i++) {
-    float ang = -PI / 2.f + i * (PI / 6.f);
-    float px = cx + cosf(ang) * r;
-    float py = cy + sinf(ang) * r;
-    t[nt].ch = labs[i][0];
-    t[nt].x = px - 6;
-    t[nt].y = py - 4;
-    nt++;
-    t[nt].ch = labs[i][1];
-    t[nt].x = px + 6;
-    t[nt].y = py - 4;
-    nt++;
-  }
-  for (int i = 0; i < nL; i++) {
-    Tgt &g = t[i % nt];
-    L[i].tx = g.x + ((i / nt) * 3);
-    L[i].ty = g.y + ((i / nt) * 2);
-    L[i].targetCh = g.ch;
-    L[i].vx = L[i].vy = 0;
-    L[i].useTargetGlyph = false;
-    L[i].size = 1;
-  }
-}
-
-void lettersUpdateRegroup(float dt) {
-  if (!regroupOn) return;
-  float k = 1.f - expf(-dt * 6.5f);
-  if (k > 1.f) k = 1.f;
-  for (int i = 0; i < nL; i++) {
-    L[i].x += (L[i].tx - L[i].x) * k;
-    L[i].y += (L[i].ty - L[i].y) * k;
-    float dx = L[i].tx - L[i].x, dy = L[i].ty - L[i].y;
-    if (dx * dx + dy * dy < 64.f) L[i].useTargetGlyph = true;
-  }
-}
-
-bool lettersRegroupSettled() {
-  float maxd = 0;
-  for (int i = 0; i < nL; i++) {
-    float dx = L[i].tx - L[i].x, dy = L[i].ty - L[i].y;
-    float d = sqrtf(dx * dx + dy * dy);
-    if (d > maxd) maxd = d;
-  }
-  return maxd < 2.8f;
-}
-
-void lettersPrepareFocus() {
-  char buf[192];
-  int m = 0;
-  for (int i = 0; quoteCopy[i] && m < 190; i++) {
-    if (quoteCopy[i] != ' ') buf[m++] = quoteCopy[i];
-  }
-  if (m == 0) buf[m++] = '*';
-
-  nL = 0;
-  scatterOn = regroupOn = false;
-  rng = 0xC0FFEEu ^ (uint32_t)m;
-  const int N = 80;
-  for (int i = 0; i < N; i++) {
-    float x = 8 + (rnd() % (LCD_W - 22));
-    float y = 14 + (rnd() % (LCD_H - 90));
-    uint8_t sz = (rnd() & 3) == 0 ? 2 : 1;
-    addLetter(buf[i % m], x, y, sz);
-    L[nL - 1].spawn = (i + 0.35f) / (float)N;
-    L[nL - 1].alive = false;
-    L[nL - 1].phase = (rnd() % 628) / 100.f;
-  }
-}
-
-void lettersUpdateFocus(float progress, float motionT, bool paused) {
-  for (int i = 0; i < nL; i++) {
-    L[i].alive = progress >= L[i].spawn;
-    if (!L[i].alive) continue;
-    if (!paused) {
-      L[i].x = L[i].homeX + sinf(motionT * 1.25f + L[i].phase) * 3.4f;
-      L[i].y = L[i].homeY + cosf(motionT * 0.95f + L[i].phase * 1.6f) * 2.4f;
+  const WordBasis basis = poetryBasis(v);
+  for (int c = 0; c < p.length; c++) {
+    const uint8_t ch = (uint8_t)scene.poem->text[p.offset + c];
+    for (int col = 0; col < 5; col++) {
+      const uint8_t bits = pgm_read_byte(&font[ch * 5 + col]);
+      for (int row = 0; row < 8;) {
+        if (!(bits & (1 << row))) { row++; continue; }
+        const int first = row;
+        while (row < 8 && (bits & (1 << row))) row++;
+        const float x = c * 6 + col - width / 2;
+        drawPixelQuad(scene, v, basis, x, first - 4, x + 1, row - 4, color);
+      }
     }
   }
 }
-
-void lettersDraw(uint16_t fg) {
-  for (int i = 0; i < nL; i++) {
-    if (!L[i].alive) continue;
-    int16_t x = (int16_t)L[i].x;
-    int16_t y = (int16_t)L[i].y;
-    if (x < -12 || y < -12 || x > LCD_W || y > LCD_H) continue;
-    gfx->setTextSize(L[i].size);
-    gfx->setTextColor(fg);
-    gfx->setCursor(x, y);
-    gfx->write((uint8_t)(L[i].useTargetGlyph ? L[i].targetCh : L[i].ch));
-  }
 }
 
-int lettersCount() { return nL; }
+bool lettersLoadPoem(const Poem &p, const MotionPreset &m) {
+  phase = MOVING;
+  transitionTime = progress = eased = 0;
+  nextReady = false;
+  return prepare(*current, p, m);
+}
+bool lettersPrepareNext(const Poem &p, const MotionPreset &m) {
+  nextReady = prepare(*incoming, p, m);
+  return nextReady;
+}
+void lettersAdoptNext() {
+  if (!nextReady) return;
+  Scene *previous = current;
+  current = incoming;
+  incoming = previous;
+  nextReady = false;
+  phase = MOVING;
+  transitionTime = progress = eased = 0;
+}
+
+void lettersUpdate(float seconds) {
+  current->time += seconds;
+  if (phase == DISSOLVING && nextReady) incoming->time += seconds;
+  transitionTime += seconds;
+  const float duration = phase == DISSOLVING ? .65f : .55f;
+  progress = clamp01(transitionTime / duration);
+  eased = progress * progress * progress * (progress * (progress * 6 - 15) + 10);
+  if (!current->valid) return;
+  for (int i = 0; i < current->count; i++) {
+    Particle &p = current->particles[i];
+    WordPose dynamic = movingPose(*current, i);
+    if (phase == MOVING) { p.pose = dynamic; p.blend = 0; }
+    else if (phase == READING) {
+      p.blend = 1;
+      p.pose = {};
+      p.pose.x = p.targetX; p.pose.y = p.targetY;
+    } else {
+      const bool assembling = phase == ASSEMBLING;
+      const float delay = (assembling ? .08f : .07f)
+          * poetryRandom(current->seed, i, assembling ? 20 : 22);
+      const float duration = assembling
+          ? .34f + .13f * poetryRandom(current->seed, i, 21)
+          : .40f + .17f * poetryRandom(current->seed, i, 23);
+      const float p0 = clamp01((transitionTime - delay) / duration);
+      p.blend = p0 * p0 * p0 * (p0 * (p0 * 6 - 15) + 10);
+      const float blend = assembling ? 1 - p.blend : p.blend;
+      p.pose.x = p.targetX + (dynamic.x - p.targetX) * blend;
+      p.pose.y = p.targetY + (dynamic.y - p.targetY) * blend;
+      p.pose.z = dynamic.z * blend;
+      p.pose.scale = 1 + (dynamic.scale - 1) * blend;
+      p.pose.rx = unwrapped(dynamic.rx, p.anchorX) * blend;
+      p.pose.ry = unwrapped(dynamic.ry, p.anchorY) * blend;
+      p.pose.rz = unwrapped(dynamic.rz, p.anchorZ) * blend;
+    }
+  }
+  if (phase == DISSOLVING && nextReady) {
+    for (int i = 0; i < incoming->count; i++)
+      incoming->particles[i].pose = movingPose(*incoming, i);
+  }
+  if (phase == ASSEMBLING && progress >= 1) phase = READING;
+}
+void lettersAssemble() {
+  if (phase != MOVING) return;
+  captureAnchors(*current);
+  for (int i = 0; i < current->count; i++) current->particles[i].blend = 0;
+  phase = ASSEMBLING;
+  transitionTime = progress = eased = 0;
+}
+void lettersDissolve() {
+  if (phase != READING || !nextReady) return;
+  captureAnchors(*current);
+  for (int i = 0; i < current->count; i++) current->particles[i].blend = 0;
+  phase = DISSOLVING;
+  transitionTime = progress = eased = 0;
+}
+bool lettersTransitionDone() {
+  return phase == READING || (phase == DISSOLVING && progress >= 1);
+}
+void lettersDraw() {
+  gfx->fillScreen(C_BLACK);
+  if (!current->valid) {
+    displayCenter("poem does not fit", 140, 1, C_WHITE, C_BLACK);
+    displayCenter("check poetry database", 160, 1, C_GREY, C_BLACK);
+    return;
+  }
+  int count = 0;
+  const int scenesToDraw = phase == DISSOLVING && nextReady ? 2 : 1;
+  for (int s = 0; s < scenesToDraw; s++) {
+    Scene *scene = s == 0 ? current : incoming;
+    for (int i = 0; i < scene->count; i++) {
+      order[count++] = {(uint16_t)i, scene};
+    }
+  }
+  // Introsort uses the fixed array, with no heap allocation and O(n log n)
+  // comparisons even during the maximum two-scene overlap. Ties keep a
+  // deterministic order independent of the previous frame's particle depths.
+  std::sort(order, order + count, [](const DrawItem &a, const DrawItem &b) {
+    const float az = a.scene->particles[a.particle].pose.z;
+    const float bz = b.scene->particles[b.particle].pose.z;
+    if (az < bz) return true;
+    if (az > bz) return false;
+    if (a.scene != b.scene) return a.scene == current;
+    return a.particle < b.particle;
+  });
+  for (int n = 0; n < count; n++) {
+    const DrawItem &item = order[n];
+    const Particle &p = item.scene->particles[item.particle];
+    if (p.echo && phase == READING) continue;
+    const float movingShade = shade(*item.scene, p.pose);
+    float brightness = movingShade;
+    if (phase == ASSEMBLING) brightness += (.9f - brightness) * p.blend;
+    if (phase == READING) brightness = .9f;
+    if (phase == DISSOLVING) {
+      brightness = item.scene == incoming ? movingShade * eased
+        : (.9f + (movingShade - .9f) * p.blend) * (1 - eased);
+    }
+    if (p.echo) {
+      brightness *= .78f;
+      if (phase == ASSEMBLING) brightness *= 1 - p.blend;
+      if (phase == DISSOLVING && item.scene == current) brightness *= p.blend;
+    }
+    if (brightness > .003f) drawParticle(*item.scene, item.particle, grey(brightness));
+  }
+  if (phase == ASSEMBLING || phase == READING || phase == DISSOLVING) {
+    const float opacity = phase == READING ? 1 : phase == ASSEMBLING ? eased : 1 - eased;
+    displayCenter(current->poem->by, (int)current->layout.authorY, 1,
+                  grey(.38f * opacity), C_BLACK);
+  }
+}
+int lettersCount() { return current->count; }
+LettersInfo lettersInfo() {
+  float minBlend = 1, maxBlend = 0, minScale = 1000, maxScale = 0;
+  int echoPhrases = 0;
+  bool sourceBoundsValid = true;
+  const size_t textLength = current->poem ? strlen(current->poem->text) : 0;
+  for (int i = 0; i < current->count; i++) {
+    minBlend = fminf(minBlend, current->particles[i].blend);
+    maxBlend = fmaxf(maxBlend, current->particles[i].blend);
+    const Particle &p = current->particles[i];
+    minScale = fminf(minScale, p.pose.scale);
+    maxScale = fmaxf(maxScale, p.pose.scale);
+    if (!p.length || p.offset + p.length > textLength) sourceBoundsValid = false;
+    else {
+      bool phrase = false;
+      for (int c = 0; c < p.length; c++) {
+        if (current->poem->text[p.offset + c] == '\n') sourceBoundsValid = false;
+        if (current->poem->text[p.offset + c] == ' ') phrase = true;
+      }
+      if (p.echo && phrase) echoPhrases++;
+    }
+  }
+  return {current->poem ? current->poem->id : nullptr,
+          nextReady ? incoming->poem->id : nullptr,
+          current->count, nextReady ? incoming->count : 0,
+          current->time, nextReady ? incoming->time : 0,
+          current->resolvedLayout, nextReady ? incoming->resolvedLayout : -1,
+          current->realCount, nextReady ? incoming->realCount : 0,
+          current->seed, nextReady ? incoming->seed : 0, minBlend, maxBlend,
+          minScale, maxScale, echoPhrases, sourceBoundsValid};
+}

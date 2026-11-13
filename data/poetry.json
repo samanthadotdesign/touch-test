@@ -1,0 +1,146 @@
+{
+  "version": 4,
+  "poems": [
+    {
+      "id": "time-present",
+      "title": "",
+      "text": "Time present and time past\nAre both perhaps present in time future\nAnd time future contained in time past.",
+      "by": "T.S. Eliot",
+      "layout": "random"
+    },
+    {
+      "id": "fools-of-themselves",
+      "title": "",
+      "text": "Do you think the things people make fools of themselves about are any less real and true than the things they behave sensibly about?",
+      "by": "Bernard Shaw",
+      "layout": "random"
+    },
+    {
+      "id": "time-is-like-a-river",
+      "title": "Meditations",
+      "text": "Time is like a river made up of the events which happen, and a violent stream; for as soon as a thing has been seen, it is carried away, and another comes in its place, and this will be carried away too.",
+      "by": "Marcus Aurelius",
+      "layout": "random"
+    },
+    {
+      "id": "every-act",
+      "title": "The Paper Menagerie and Other Stories",
+      "text": "We are defined by the places we hold in the web of others’ lives.",
+      "by": "Ken Liu",
+      "layout": "random"
+    },
+    {
+      "id": "every-act",
+      "title": "The Paper Menagerie and Other Stories",
+      "text": "We spend our entire lives trying to tell stories about ourselves—they’re the essence of memory. It is how we make living in this unfeeling, accidental universe tolerable.",
+      "by": "Ken Liu",
+      "layout": "random"
+    }
+  ],
+  "animations": [
+    {
+      "id": "orbit",
+      "name": "Orbit",
+      "kind": 0,
+      "speed": 0.55,
+      "spread": 96,
+      "depth": 100,
+      "tilt": 0.45,
+      "spin": 0.15,
+      "perspective": 420,
+      "unit": "mixed",
+      "formation": "cluster"
+    },
+    {
+      "id": "helix",
+      "name": "Helix",
+      "kind": 1,
+      "speed": 0.5,
+      "spread": 92,
+      "depth": 130,
+      "tilt": 0.6,
+      "spin": 0.2,
+      "perspective": 420,
+      "unit": "mixed",
+      "formation": "stream"
+    },
+    {
+      "id": "wave",
+      "name": "Wave",
+      "kind": 2,
+      "speed": 0.65,
+      "spread": 100,
+      "depth": 80,
+      "tilt": 0.35,
+      "spin": 0.1,
+      "perspective": 420,
+      "unit": "mixed",
+      "formation": "stream"
+    },
+    {
+      "id": "vortex",
+      "name": "Vortex",
+      "kind": 3,
+      "speed": 0.6,
+      "spread": 96,
+      "depth": 120,
+      "tilt": 0.5,
+      "spin": 0.25,
+      "perspective": 420,
+      "unit": "mixed",
+      "formation": "cluster"
+    },
+    {
+      "id": "drift",
+      "name": "Drift",
+      "kind": 4,
+      "speed": 0.45,
+      "spread": 98,
+      "depth": 90,
+      "tilt": 0.3,
+      "spin": 0.12,
+      "perspective": 420,
+      "unit": "mixed",
+      "formation": "patches"
+    },
+    {
+      "id": "tumble",
+      "name": "Tumble",
+      "kind": 5,
+      "speed": 0.5,
+      "spread": 92,
+      "depth": 110,
+      "tilt": 0.7,
+      "spin": 0.4,
+      "perspective": 420,
+      "unit": "mixed",
+      "formation": "patches"
+    },
+    {
+      "id": "cloud",
+      "name": "Cloud",
+      "kind": 6,
+      "speed": 0.45,
+      "spread": 96,
+      "depth": 130,
+      "tilt": 0.25,
+      "spin": 0.08,
+      "perspective": 420,
+      "unit": "mixed",
+      "formation": "cluster"
+    },
+    {
+      "id": "ribbon",
+      "name": "Ribbon",
+      "kind": 7,
+      "speed": 0.55,
+      "spread": 100,
+      "depth": 110,
+      "tilt": 0.25,
+      "spin": 0.08,
+      "perspective": 420,
+      "unit": "mixed",
+      "formation": "stream"
+    }
+  ]
+}

@@ -1,15 +1,29 @@
 #pragma once
-
 #include <Arduino.h>
+#include "poetry_data.h"
 
-void lettersLoadQuote(const char *text);
-void lettersStartScatter(float speedPx);
-void lettersUpdateScatter(float dt);
-bool lettersScatterDone();
-void lettersStartClock();
-void lettersUpdateRegroup(float dt);
-bool lettersRegroupSettled();
-void lettersPrepareFocus();
-void lettersUpdateFocus(float progress, float motionT, bool paused);
-void lettersDraw(uint16_t fg);
+bool lettersLoadPoem(const Poem &poem, const MotionPreset &motion);
+bool lettersPrepareNext(const Poem &poem, const MotionPreset &motion);
+void lettersAdoptNext();
+void lettersUpdate(float seconds);
+void lettersAssemble();
+void lettersDissolve();
+bool lettersTransitionDone();
+void lettersDraw();
 int lettersCount();
+
+// Read-only engine telemetry for diagnostics and native transition tests.
+struct LettersInfo {
+  const char *poemId;
+  const char *nextPoemId;
+  int particles, nextParticles;
+  float time, nextTime;
+  int resolvedLayout, nextResolvedLayout;
+  int realParticles, nextRealParticles;
+  uint32_t seed, nextSeed;
+  float minBlend, maxBlend;
+  float minScale, maxScale;
+  int echoPhrases;
+  bool sourceBoundsValid;
+};
+LettersInfo lettersInfo();

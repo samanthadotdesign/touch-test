@@ -5,3 +5,7 @@
 .vscode/launch.json
 .vscode/ipch
 compile_commands.json
+
+.venv/
+.platformio/
+__pycache__/

@@ -66,26 +66,3 @@ void displayCenter(const char *s, int16_t y, uint8_t size, uint16_t fg, uint16_t
   gfx->setCursor((LCD_W - w) / 2, y);
   gfx->print(s);
 }
-
-void displayMMSS(uint32_t ms, char *buf, size_t n) {
-  uint32_t s = ms / 1000UL;
-  snprintf(buf, n, "%u:%02u", (unsigned)(s / 60UL), (unsigned)(s % 60UL));
-}
-
-void displayDrawPausePlay(bool showPlay, uint16_t fg, uint16_t bg) {
-  const int16_t x = PAUSE_X, y = PAUSE_Y, s = PAUSE_HIT;
-  gfx->fillRoundRect(x, y, s, s, 6, bg);
-  gfx->drawRoundRect(x, y, s, s, 6, fg);
-  if (showPlay) {
-    int16_t cx = x + s / 2, cy = y + s / 2;
-    gfx->fillTriangle(cx - 8, cy - 12, cx - 8, cy + 12, cx + 12, cy, fg);
-  } else {
-    gfx->fillRect(x + 14, y + 12, 6, 24, fg);
-    gfx->fillRect(x + 28, y + 12, 6, 24, fg);
-  }
-}
-
-bool displayInPause(int16_t x, int16_t y) {
-  return x >= PAUSE_X && x < PAUSE_X + PAUSE_HIT &&
-         y >= PAUSE_Y && y < PAUSE_Y + PAUSE_HIT;
-}
