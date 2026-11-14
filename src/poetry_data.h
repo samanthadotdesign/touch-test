@@ -4,9 +4,11 @@
 
 struct Poem { const char *id; const char *title; const char *text; const char *by; uint8_t layout; };
 static const Poem POEMS[] = {
-  {"time-present-and-time-past", "", "Time present and time past\nAre both perhaps present in time future\nAnd time future contained in time past.", "T.S. Eliot", 8},
-  {"the-things-people-make-fools-of-themselves-about", "", "Do you think the things people make fools of themselves about are any less real and true than the things they behave sensibly about?", "Bernard Shaw", 8},
+  {"time-present", "", "Time present and time past\nAre both perhaps present in time future\nAnd time future contained in time past.", "T.S. Eliot", 8},
+  {"fools-of-themselves", "", "Do you think the things people make fools of themselves about are any less real and true than the things they behave sensibly about?", "Bernard Shaw", 8},
   {"time-is-like-a-river", "Meditations", "Time is like a river made up of the events which happen, and a violent stream; for as soon as a thing has been seen, it is carried away, and another comes in its place, and this will be carried away too.", "Marcus Aurelius", 8},
+  {"every-act", "The Paper Menagerie and Other Stories", "We are defined by the places we hold in the web of others' lives.", "Ken Liu", 8},
+  {"every-act-memory", "The Paper Menagerie and Other Stories", "We spend our entire lives trying to tell stories about ourselves-they're the essence of memory. It is how we make living in this unfeeling, accidental universe tolerable.", "Ken Liu", 8},
 };
 static const int POEM_COUNT = sizeof(POEMS) / sizeof(POEMS[0]);
 

@@ -14,14 +14,29 @@ There are no Pomodoro timers, clocks, duration pickers, signatures, or automatic
 Open `sandbox/index.html` directly in a browser, or run:
 
 ```sh
-python3 -m http.server 8765 --bind 127.0.0.1 --directory sandbox
+python3 -m http.server 8765 --bind 127.0.0.1
 ```
 
-Visit http://127.0.0.1:8765. Click/tap the black display, or focus it and press Enter or Space. The Motion studio provides eight families: Orbit, Helix, Wave, Vortex, Drift, Tumble, Cloud, and Ribbon. Mixed words and letters are the default motion unit. Each scene randomly chooses which words stay together and which split into letters. The field uses independent speeds, directions, depth phases, and rotations for every fragment. Clicking a motion preset again creates a fresh scene. Choose **Animate as → Individual letters** or **Whole words** for an unmixed field. The moving scene contains at least 180 particles, using faint echoes of the poem to cover the display; echoes converge and fade during assembly, leaving one exact copy of the poem. Adjust speed, spread, depth, 3D tilt, spin, and camera perspective; give a variation a name and **Save style** to include it in the random rotation. Changing controls restarts the moving preview. **Reset** restores the selected saved preset.
+Visit http://127.0.0.1:8765/sandbox/. Click/tap the black display, or focus it and press Enter or Space. The Motion studio provides eight families: Orbit, Helix, Wave, Vortex, Drift, Tumble, Cloud, and Ribbon. Mixed words and letters are the default motion unit. Each scene randomly chooses which words stay together and which split into letters. The field uses independent speeds, directions, depth phases, and rotations for every fragment. Clicking a motion preset again creates a fresh scene. Choose **Animate as → Individual letters** or **Whole words** for an unmixed field. The moving scene contains at least 180 particles, using faint echoes of the poem to cover the display; echoes converge and fade during assembly, leaving one exact copy of the poem. All presets and saved variations run at twice the original motion tempo. The Speed control shows the effective multiplier. Adjust speed, spread, depth, 3D tilt, spin, and camera perspective; give a variation a name and **Save style** to include it in the random rotation. Changing controls restarts the moving preview. **Reset** restores the selected saved preset.
 
-The Poetry library lets you select, edit, and add poems or quotes with an attribution. The collection stores the poem or quote text together with its attribution. Explicit line breaks are preserved and long lines wrap to a compact 168 px measure. **Random** chooses a different eligible reading composition for every scene. Twelve options include centered verse, left alignment, diagonal steps, reverse steps, zigzag steps, scattered constellations, word cascades, stanza islands, mirrored islands, three islands, wavy lines, and twin columns. The selected composition stays fixed while reading. Use **Shuffle layout** to audition another arrangement of the current poem, or choose a fixed layout and save the poem. Spatial layouts rearrange whole words in reading order; verse layouts retain explicit line breaks. The body now uses bitmap font size 1 (6 px advance, 8 px height), half the previous default size, with generous surrounding space. Words longer than 28 characters are rejected. Unrenderable content is rejected rather than truncated. The current device font supports printable ASCII, up to 512 characters / 96 words per poem, and authors up to 35 characters.
+The Poetry library lets you select, edit, and add poems or quotes with an attribution. The collection stores the poem or quote text together with its attribution. Explicit line breaks are preserved and long lines wrap to a compact 168 px measure. **Random** chooses a different eligible reading composition for every scene. Twelve options include centered verse, left alignment, diagonal steps, reverse steps, zigzag steps, scattered constellations, word cascades, stanza islands, mirrored islands, three islands, wavy lines, and twin columns. The selected composition stays fixed while reading. Use **Shuffle layout** to audition another arrangement of the current poem, or choose a fixed layout and save the poem. Spatial layouts rearrange whole words in reading order; verse layouts retain explicit line breaks. The body now uses bitmap font size 1 (6 px advance, 8 px height), half the previous default size, with generous surrounding space. Words longer than 28 characters are rejected. Unrenderable content is rejected rather than truncated. The current device font supports printable ASCII glyphs plus display aliases for smart quotes, dashes, nonbreaking spaces, and ellipses. The source library retains its original Unicode punctuation, up to 512 characters / 96 words per poem, and authors up to 35 characters.
 
-Saved poems/styles persist in this browser's local storage. Library edits are local to the browser until you export them. Use **Library files & device setup → Export library** for a portable JSON backup. Import validates the entire file before replacing the browser collection. Export before switching browsers or clearing browser data. Changing the active preset or its sliders alone does not overwrite saved styles.
+Saved poems/styles persist in this browser's local storage. Library edits are local to the browser until you export them. The main poetry collection initially loads from `data/poetry.json`, through the generated browser data; stale browser-saved demo poems cannot hide a newer database. Use **Library files & device setup → Export library** for a portable JSON backup. Import validates the entire file before replacing the browser collection. Export before switching browsers or clearing browser data. Changing the active preset or its sliders alone does not overwrite saved styles.
+
+## Screen-only prototyping sandbox
+
+Open [prototype/index.html](prototype/index.html), visit
+http://127.0.0.1:8765/prototype/ with the server above, or use **Open device
+prototype ↗** in the studio. This view shows only the 240 × 320 display, scaled
+to fit, and uses the same engine, renderer, font, and library as the tuning
+studio. Tap to read; tap again for a new scene. Saved studio poems and styles
+also load here when both views share an origin; unsaved controls remain a studio
+preview. The screen-only view never writes to your saved library.
+
+Create a self-contained Figma Code Layer archive with
+`python3 scripts/package_prototype.py --output /tmp/esp32-prototype.tgz`.
+See [prototype/README.md](prototype/README.md) for the source and browser-library
+workflow. Figma imports a snapshot; later Git or studio changes need a new import.
 
 ## Put your collection on the ESP32
 
@@ -33,7 +48,7 @@ python3 scripts/generate_poetry.py
 ./pio run --target upload
 ```
 
-The generator validates IDs, text, layout, and motion bounds, then produces `src/poetry_data.h` and `sandbox/poetry-data.js`. Refresh the sandbox to load regenerated data; an existing browser-saved library continues to take priority. The firmware database is compiled into flash and needs no network connection or external database service.
+The generator validates IDs, text, layout, and motion bounds, emits a source revision, and produces `src/poetry_data.h` and `sandbox/poetry-data.js`. Refresh the sandbox to load regenerated data; the source revision updates the browser collection, replacing stale source copies and unused demo poems while keeping custom poems and animation styles. The previous browser library is backed up before migration. Saved edits for the same source revision continue to load normally. The firmware database is compiled into flash and needs no network connection or external database service.
 
 ## Motion and perspective
 
@@ -71,7 +86,7 @@ On this Mac, macOS code-trust enforcement terminates the downloaded 2022 ARM64 c
 ## Validation
 
 ```sh
-node --test test/poetry_engine.test.cjs
+node --test test/*.test.cjs
 python3 scripts/generate_poetry.py --check
 ```
 

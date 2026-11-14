@@ -5,6 +5,8 @@
 #include <math.h>
 #include "poetry_data.h"
 
+constexpr float POETRY_MOTION_TEMPO = 2.f;
+
 struct WordPose {
   float x = 0, y = 0, z = 0;
   float rx = 0, ry = 0, rz = 0;
@@ -112,6 +114,7 @@ inline float poetryRandom(uint32_t seed, int index, int channel) {
 // loose plumes and irregular islands leave intentional negative space.
 inline WordPose poetryFieldMotion(const MotionPreset &m, int index, int count,
                                   float seconds, float width = 6, uint32_t seed = 0) {
+  seconds *= POETRY_MOTION_TEMPO;
   const auto r = [seed, index](int channel) { return poetryRandom(seed, index, channel); };
   const float pi = 3.14159265359f, pi2 = 2 * pi;
   const float rate = .35f + 1.4f * r(3), direction = r(4) < .5f ? -1 : 1;

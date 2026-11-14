@@ -3,14 +3,14 @@ globalThis.POETRY_DATA = {
   "version": 4,
   "poems": [
     {
-      "id": "time-present-and-time-past",
+      "id": "time-present",
       "title": "",
       "text": "Time present and time past\nAre both perhaps present in time future\nAnd time future contained in time past.",
       "by": "T.S. Eliot",
       "layout": "random"
     },
     {
-      "id": "the-things-people-make-fools-of-themselves-about",
+      "id": "fools-of-themselves",
       "title": "",
       "text": "Do you think the things people make fools of themselves about are any less real and true than the things they behave sensibly about?",
       "by": "Bernard Shaw",
@@ -21,6 +21,20 @@ globalThis.POETRY_DATA = {
       "title": "Meditations",
       "text": "Time is like a river made up of the events which happen, and a violent stream; for as soon as a thing has been seen, it is carried away, and another comes in its place, and this will be carried away too.",
       "by": "Marcus Aurelius",
+      "layout": "random"
+    },
+    {
+      "id": "every-act",
+      "title": "The Paper Menagerie and Other Stories",
+      "text": "We are defined by the places we hold in the web of others’ lives.",
+      "by": "Ken Liu",
+      "layout": "random"
+    },
+    {
+      "id": "every-act-memory",
+      "title": "The Paper Menagerie and Other Stories",
+      "text": "We spend our entire lives trying to tell stories about ourselves—they’re the essence of memory. It is how we make living in this unfeeling, accidental universe tolerable.",
+      "by": "Ken Liu",
       "layout": "random"
     }
   ],
@@ -131,6 +145,8 @@ globalThis.POETRY_DATA = {
     }
   ]
 };
+
+globalThis.POETRY_SOURCE_REVISION = "f778a16cf198d4af9cda0702cce67202997c50c5e9262b105c5fccb25867f00d";
 
 /* ASCII font from Adafruit GFX; see data/font5x7.json for provenance.
 Software License Agreement (BSD License)

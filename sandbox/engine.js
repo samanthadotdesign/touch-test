@@ -6,6 +6,7 @@
   const KIND_FORMATIONS=['cluster','stream','stream','cluster','patches','patches','cluster','stream'];
   const KINDS = ['Orbit', 'Helix', 'Wave', 'Vortex', 'Drift', 'Tumble', 'Cloud', 'Ribbon'];
   const LIMITS = {speed:[.1,2],spread:[20,100],depth:[0,180],tilt:[0,1.2],spin:[0,1],perspective:[240,800]};
+  const MOTION_TEMPO=2;
   const ASSEMBLE_SECONDS=.55, CHANGE_SECONDS=.65;
   const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
   // Zero acceleration at both ends, while the underlying field keeps moving.
@@ -15,7 +16,12 @@
   const shade=(z,depth)=>.12+.84*Math.pow(clamp(.5+z/(2*Math.max(depth,1)),0,1),1.35);
   const LAYOUTS = ['centered','left','stepped','constellation','cascade','split','wave','columns','stepped-reverse','stepped-zigzag','split-mirrored','split-three'];
   const LAYOUT_LABELS = ['Centered verse','Left aligned','Diagonal steps','Constellation','Word cascade','Stanza islands','Wavy lines','Twin columns','Reverse steps','Zigzag steps','Mirrored islands','Three islands'];
+  function displayText(value){
+    const aliases={"\u2018":"'","\u2019":"'","\u201a":"'","\u201b":"'","\u201c":'"',"\u201d":'"',"\u201e":'"',"\u201f":'"',"\u2010":"-","\u2011":"-","\u2012":"-","\u2013":"-","\u2014":"-","\u2212":"-","\u00a0":" ","\u202f":" ","\u2026":"..."};
+    return value.replace(/[\u2018-\u201f\u2010-\u2014\u2212\u00a0\u202f\u2026]/g,c=>aliases[c]);
+  }
   function layout(text,readingLayout='centered') {
+    text=displayText(text);
     if(readingLayout==='random'){
       for(const candidate of LAYOUTS){try{return layout(text,candidate);}catch(error){/* try another composition */}}
       throw Error('This poem does not fit any reading layout.');
@@ -114,9 +120,9 @@
     }
     for(const p of data.poems) {
       for(const key of ['id','text','by'])if(typeof p[key]!=='string'||!p[key].trim())throw Error(`Poem ${p.id}: ${key} is required.`);
-      if(!/^[\x20-\x7e\n]+$/.test(p.text)||!/^[\x20-\x7e]+$/.test(p.by+p.title))throw Error('The device font supports printable ASCII only. Use straight quotes and simple punctuation.');
-      if(typeof p.title!=='string'||! /^[\x20-\x7e]*$/.test(p.title))throw Error('Title must be ASCII text or empty.');
-      if(p.text.length>512||p.text.trim().split(/\s+/).length>96||p.by.length>35||p.title.length>60)throw Error('Poems allow 512 characters / 96 words, titles 60 characters, and authors 35 characters.');
+      if(!/^[\x20-\x7e\n]+$/.test(displayText(p.text))||!/^[\x20-\x7e]+$/.test(displayText(p.by)))throw Error('The device font cannot render one of these characters. Smart quotes and dashes are supported.');
+      if(typeof p.title!=='string'||! /^[\x20-\x7e]*$/.test(displayText(p.title)))throw Error('Title must use supported text or be empty.');
+      if(displayText(p.text).length>512||displayText(p.text).trim().split(/\s+/).length>96||displayText(p.by).length>35||displayText(p.title).length>60)throw Error('Poems allow 512 characters / 96 words, titles 60 characters, and authors 35 characters.');
       if(p.layout===undefined)p.layout='random';layout(p.text,p.layout);
     }
     for(const a of data.animations){if(typeof a.name!=='string'||!a.name.trim()||a.name.length>60||!/^[\x20-\x7e]+$/.test(a.name))throw Error('Animation names need 1–60 simple Latin letters or punctuation.');
@@ -143,6 +149,7 @@
     return {x,y,z,rx,ry,rz};
   }
   function fieldPose(index,count,seconds,m,width=6,seed=0){
+    seconds*=MOTION_TEMPO;
     const r=channel=>particleRandom(seed,index,channel),tau=Math.PI*2;
     const rate=.35+1.4*r(3),direction=r(4)<.5?-1:1,phaseX=r(0)*tau,phaseY=r(1)*tau,phaseZ=r(2)*tau;
     const v=pose(index,count,seconds*rate*direction+phaseX*18,m),t=seconds*m.speed;
@@ -222,6 +229,6 @@
       if(this.mode==='DISSOLVING'&&this.age>=CHANGE_SECONDS)this.adopt(this.next);
     }
   }
-  const api={KINDS,LIMITS,FORMATIONS,FORMATION_LABELS,LAYOUTS,LAYOUT_LABELS,layout,particleRandom,particleProgress,buildUnits,validateLibrary,pose,fieldPose,project,Experience,ease,shade,ASSEMBLE_SECONDS,CHANGE_SECONDS};
+  const api={MOTION_TEMPO,KINDS,LIMITS,FORMATIONS,FORMATION_LABELS,LAYOUTS,LAYOUT_LABELS,displayText,layout,particleRandom,particleProgress,buildUnits,validateLibrary,pose,fieldPose,project,Experience,ease,shade,ASSEMBLE_SECONDS,CHANGE_SECONDS};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.PoetryEngine=api;
 })(globalThis);

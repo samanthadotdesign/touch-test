@@ -1,7 +1,7 @@
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
-const {Experience,layout,pose,fieldPose,particleProgress,particleRandom,FORMATIONS,LAYOUTS,buildUnits,project,validateLibrary,shade,ASSEMBLE_SECONDS,CHANGE_SECONDS}=require('../sandbox/engine.js');
+const {Experience,layout,pose,fieldPose,particleProgress,particleRandom,FORMATIONS,LAYOUTS,buildUnits,project,validateLibrary,displayText,shade,ASSEMBLE_SECONDS,CHANGE_SECONDS}=require('../sandbox/engine.js');
 const actualLibrary=JSON.parse(fs.readFileSync(require('node:path').join(__dirname,'../data/poetry.json'),'utf8'));
 const source={...actualLibrary,poems:require('./fixtures/poems.json')};
 const clone=()=>JSON.parse(JSON.stringify(source));
@@ -60,7 +60,7 @@ test('legacy libraries migrate, valid exports round trip, and invalid content is
  validateLibrary(data);assert.equal(data.version,4);assert.equal(data.poems[0].layout,'random');assert.equal(data.animations[0].unit,'mixed');
  data.poems.push({id:'custom-poem',title:'A quote',text:'Be here.\nBe still.',by:'Your name',layout:'stepped'});data.animations.push({...data.animations[0],id:'custom-style',name:'Slow orbit',speed:.15,depth:180,unit:'words'});
  const exported=validateLibrary(JSON.parse(JSON.stringify(data)));assert.equal(exported.poems.at(-1).layout,'stepped');assert.equal(exported.animations.at(-1).unit,'words');
- for(const mutate of [d=>d.poems[0].text='Curly “quotes”',d=>d.poems[0].id='Invalid ID',d=>d.animations[0].name='é',d=>d.animations[0].perspective=0,d=>d.animations[0].kind=8,d=>d.animations[0].depth=181,d=>d.animations[0].unit='paragraphs',d=>d.poems[0].layout='unknown',d=>d.animations[0].speed=NaN,d=>d.poems.push(d.poems[0]),d=>d.version=5]){const invalid=clone();mutate(invalid);assert.throws(()=>validateLibrary(invalid));}
+ for(const mutate of [d=>d.poems[0].text='Unsupported 🌙 symbol',d=>d.poems[0].id='Invalid ID',d=>d.animations[0].name='é',d=>d.animations[0].perspective=0,d=>d.animations[0].kind=8,d=>d.animations[0].depth=181,d=>d.animations[0].unit='paragraphs',d=>d.poems[0].layout='unknown',d=>d.animations[0].speed=NaN,d=>d.poems.push(d.poems[0]),d=>d.version=5]){const invalid=clone();mutate(invalid);assert.throws(()=>validateLibrary(invalid));}
 });
 test('maximum supported body expands to bounded independent glyphs',()=>{
  const text=Array(19).fill('a'.repeat(26)).join('\n');assert.equal(text.length,512);const l=layout(text);assert.equal(l.letters.length,494);assert.ok(l.authorY+8<=304);
@@ -110,3 +110,5 @@ test('current editable poetry library remains valid independently of the test co
 test('formation settings migrate and round trip without overriding explicit choices',()=>{const d=clone();d.version=3;for(const a of d.animations)delete a.formation;validateLibrary(d);assert.deepEqual(d.animations.map(a=>a.formation),['cluster','stream','stream','cluster','patches','patches','cluster','stream']);d.animations[0].formation='patches';assert.equal(validateLibrary(JSON.parse(JSON.stringify(d))).animations[0].formation,'patches');const invalid=clone();invalid.animations[0].formation='uniform';assert.throws(()=>validateLibrary(invalid));});
 
 test('condensed cloud centers vary between scenes while drifting continuously',()=>{const m={...source.animations[0],formation:'cluster'},centers=[];for(const seed of Array.from({length:32},(_,i)=>i)){const center=time=>{const points=Array.from({length:180},(_,i)=>i).filter(i=>particleRandom(seed,i,13)<.74).map(i=>project(0,0,fieldPose(i,180,time,m,6,seed),m.perspective));return[points.reduce((s,p)=>s+p[0],0)/points.length,points.reduce((s,p)=>s+p[1],0)/points.length];};const a=center(0),b=center(.05);assert.ok(Math.hypot(a[0]-b[0],a[1]-b[1])<1);centers.push(a);}assert.ok(Math.max(...centers.map(p=>p[0]))-Math.min(...centers.map(p=>p[0]))>70);assert.ok(Math.max(...centers.map(p=>p[1]))-Math.min(...centers.map(p=>p[1]))>100);});
+
+test('smart punctuation renders with device glyph aliases while source text stays intact',()=>{const d=clone(),original='Others’ lives—“a story”…';d.poems[0].text=original;d.poems[0].title='';assert.doesNotThrow(()=>validateLibrary(d));assert.equal(d.poems[0].text,original);assert.equal(d.poems[0].title,'');assert.equal(displayText(original),`Others' lives-"a story"...`);assert.equal(layout(original).words.map(w=>w.text).join(' '),`Others' lives-"a story"...`);const e=new Experience(d,()=>0);e.selectPoem(0);assert.equal(e.poem.text,original);assert.ok(e.units().every(u=>/^[\x20-\x7e]+$/.test(u.text)));});

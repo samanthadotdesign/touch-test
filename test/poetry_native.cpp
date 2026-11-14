@@ -124,7 +124,7 @@ int main() {
     for (float seconds : {0.f, 5.f, 20.f}) {
     bool cells[48] = {};
     int occupied = 0, inCore = 0, outliers = 0, onStream = 0, onPatch = 0;
-    const float t = seconds * m.speed;
+    const float t = seconds * m.speed * POETRY_MOTION_TEMPO;
     const float globalP = poetryRandom(seed, 0, 60) * 6.28318530718f;
     const float coreX = (poetryRandom(seed, 0, 61) * 2 - 1) * 62 + 18 * sinf(t * .07f + globalP);
     const float coreY = (poetryRandom(seed, 0, 62) * 2 - 1) * 94 + 14 * cosf(t * .05f + globalP);
