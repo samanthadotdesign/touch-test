@@ -1,21 +1,37 @@
 Native firmware tests (no ESP32 required)
 ========================================
 
-From the repository root, after PlatformIO downloads the display dependency:
+Run all three suites from the repository root after PlatformIO has downloaded
+the GFX Library for Arduino dependency. Its font data is used by the poetry
+suite; ./pio run fetches it before compiling the firmware.
 
-clang++ -std=c++11 -Wall -Wextra -Werror \
-  -Itest/native_stubs -Isrc \
-  -I'.pio/libdeps/esp32s3/GFX Library for Arduino/src' \
-  test/poetry_native.cpp src/app.cpp src/letters.cpp \
-  -o /tmp/poetry-native-test
-/tmp/poetry-native-test
 
-These tests compile the production app state machine, animation renderer,
-layout, motion, and perspective math. Only Arduino, touch, display output,
-random seed and clock interfaces are stubbed. They check explicit line breaks,
-centering, twelve small-font layouts and random eligible selection, overflow rejection, all eight animation styles,
-edge-on projection, near-plane clipping, mixed words/letters, faint full-screen echoes that disappear from the reading corpus, continuous 0.55 s assembly, overlapping 0.65 s scene changes, retained incoming motion clocks, 468-particle stress cases and clustered/stream/patch formation occupancy, variable scale that settles to1, safe multiword fragments, seeded independent drift, randomized grouping, and staggered particle timing,
-indefinite moving/reading states, and held-finger behavior.
+./scripts/test_native.sh
 
-This is not a hardware or performance test. Use ./pio run for an ESP32 build
-and verify frame rate and touch behavior on the actual board when available.
+The script uses a host C++ compiler with warnings treated as errors. It builds
+and runs these production-code suites:
+
+- poetry_native.cpp: app state, touch gating, reading layouts, word motion,
+  perspective, 0.66x-1.1x fragment scale, breath response, hidden theme menu,
+  and saved settings.
+- atmosphere_native.cpp: independent colour fields, three themes, grain,
+  readable ink, smoothed sound response, and one navigation per strong breath.
+- audio_input_native.cpp: the ES8311 module with simulated I2C and I2S. It
+  checks staged startup, discarded warmup spikes, normalized RMS, either active
+  slot, bounded zero-timeout DMA reads, stale input, stop/cancel/re-enable,
+  and cleanup after codec or driver errors.
+
+Arduino, display output, touch, settings, clocks, and audio hardware are stubbed
+as needed. These tests do not measure hardware frame rate or prove the physical
+microphone and touch screen work.
+
+Browser and generated-library checks:
+
+node --test test/*.test.cjs
+python3 scripts/generate_poetry.py --check
+
+Build the ESP32 binary with ./pio run, or use the ESP32 firmware GitHub Actions
+workflow on Ubuntu. Download esp32s3-firmware only from a successful run for the
+intended commit. See ../docs/FIRMWARE_FLASHING.md for updating from main and
+flashing individual binaries while retaining saved settings. The merged image
+is for first installs or updates where resetting settings is acceptable.

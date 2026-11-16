@@ -14,3 +14,4 @@ void appGo(AppState s);
 AppState appState();
 const char *appStateName(AppState s);
 uint32_t appStateEnteredAt();
+bool appMenuVisible();

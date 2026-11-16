@@ -25,6 +25,16 @@
 
 #define BOOT_BTN  0
 
+// ---------- On-board ES8311 microphone ----------
+// LCDwiki ES3C28P: shared touch/codec I2C; ESP32 is the I2S clock master.
+#define AUDIO_CODEC_ADDR 0x18
+#define AUDIO_MCLK       4
+#define AUDIO_BCLK       5
+#define AUDIO_WS         7
+#define AUDIO_DIN        6
+#define AUDIO_DOUT       8
+#define AUDIO_AMP_EN     1
+
 // ---------- Colours (RGB565) ----------
 #define C_BLACK   0x0000
 #define C_WHITE   0xFFFF

@@ -157,7 +157,8 @@
     v.rx=.45*Math.sin(v.rx)+.15*m.tilt*Math.sin(t*rate*.15+phaseZ);
     v.ry=.45*Math.sin(v.ry)+.15*m.tilt*Math.cos(t*rate*.13+phaseX);
     v.rz=.12*Math.sin(v.rz)+.08*m.spin*Math.sin(t*rate*.11+phaseY);
-    v.scale=.55+.55*r(27)*r(27);
+    const minimumScale=.55*1.20;
+    v.scale=minimumScale+(1.1-minimumScale)*r(27)*r(27);
     const gx=r(14)+r(15)+r(16)-1.5,gy=r(17)+r(18)+r(19)-1.5;
     const formation=m.formation??KIND_FORMATIONS[m.kind];let sx,sy;
     if(formation==='cluster'){

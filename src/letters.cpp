@@ -1,5 +1,6 @@
 #include "letters.h"
 #include "display.h"
+#include "atmosphere.h"
 #include "poetry_layout.h"
 #include "poetry_motion.h"
 #include <font/glcdfont.h>
@@ -34,22 +35,21 @@ DrawItem order[POETRY_MAX_CHARS * 2];
 Phase phase = MOVING;
 float transitionTime = 0, progress = 0, eased = 0;
 bool nextReady = false;
+float responseSpeed = 1, responseForce = 0;
 
 float clamp01(float n) { return n < 0 ? 0 : n > 1 ? 1 : n; }
 float angle(float a) { return atan2f(sinf(a), cosf(a)); }
 float unwrapped(float a, float anchor) { return anchor + angle(a - anchor); }
-uint16_t grey(float amount) {
-  const int g = (int)(clamp01(amount) * 255);
-  return ((g >> 3) << 11) | ((g >> 2) << 5) | (g >> 3);
-}
 float shade(const Scene &scene, const WordPose &pose) {
   const float range = fmaxf(scene.motion->depth, 1);
   return .12f + .84f * powf(clamp01(.5f + pose.z / (2 * range)), 1.35f);
 }
 
 WordPose movingPose(const Scene &scene, int index) {
-  return poetryFieldMotion(*scene.motion, index, scene.count, scene.time,
-                           scene.particles[index].length * 6, scene.seed);
+  const float width = scene.particles[index].length * 6;
+  const WordPose pose = poetryFieldMotion(*scene.motion, index, scene.count,
+                                         scene.time, width, scene.seed);
+  return poetryBreathMotion(*scene.motion, pose, index, width, scene.seed, responseForce);
 }
 
 bool prepare(Scene &scene, const Poem &poem, const MotionPreset &motion) {
@@ -152,7 +152,7 @@ void captureAnchors(Scene &scene) {
 }
 
 void drawPixelQuad(const Scene &scene, const WordPose &v, const WordBasis &basis,
-                   float x0, float y0, float x1, float y1, uint16_t color) {
+                   float x0, float y0, float x1, float y1, float opacity) {
   float x[4], y[4];
   if (!poetryProject(v, basis, x0, y0, scene.motion->perspective, x[0], y[0]) ||
       !poetryProject(v, basis, x1, y0, scene.motion->perspective, x[1], y[1]) ||
@@ -169,6 +169,7 @@ void drawPixelQuad(const Scene &scene, const WordPose &v, const WordBasis &basis
   // matching the crisp built-in glyph used after assembly instead of thickening.
   const float cx = (x[0] + x[1] + x[2] + x[3]) * .25f;
   const float cy = (y[0] + y[1] + y[2] + y[3]) * .25f;
+  const uint16_t color = atmosphereInk(opacity, (int)cx, (int)cy);
   for (int i = 0; i < 4; i++) {
     x[i] = floorf(fmaxf(-1024, fminf(1024, x[i] + (cx - x[i]) * .01f)));
     y[i] = floorf(fmaxf(-1024, fminf(1024, y[i] + (cy - y[i]) * .01f)));
@@ -178,13 +179,13 @@ void drawPixelQuad(const Scene &scene, const WordPose &v, const WordBasis &basis
   gfx->fillTriangle((int)x[0], (int)y[0], (int)x[2], (int)y[2],
                     (int)x[3], (int)y[3], color);
 }
-void drawParticle(const Scene &scene, int index, uint16_t color) {
+void drawParticle(const Scene &scene, int index, float opacity) {
   const Particle &p = scene.particles[index];
   const WordPose &v = p.pose;
   const float width = p.length * 6;
   if (phase == READING) {
     gfx->setTextSize(1);
-    gfx->setTextColor(color);
+    gfx->setTextColor(atmosphereInk(opacity, (int)(120 + v.x), (int)(160 + v.y)));
     gfx->setCursor((int)(120 + v.x - width / 2), (int)(160 + v.y - 4));
     for (int c = 0; c < p.length; c++) gfx->write((uint8_t)scene.poem->text[p.offset + c]);
     return;
@@ -199,7 +200,7 @@ void drawParticle(const Scene &scene, int index, uint16_t color) {
         const int first = row;
         while (row < 8 && (bits & (1 << row))) row++;
         const float x = c * 6 + col - width / 2;
-        drawPixelQuad(scene, v, basis, x, first - 4, x + 1, row - 4, color);
+        drawPixelQuad(scene, v, basis, x, first - 4, x + 1, row - 4, opacity);
       }
     }
   }
@@ -226,9 +227,16 @@ void lettersAdoptNext() {
   transitionTime = progress = eased = 0;
 }
 
+void lettersSetResponse(float motionScale, float blowForce) {
+  responseSpeed = isfinite(motionScale) ? fmaxf(1, fminf(5, motionScale)) : 1;
+  responseForce = isfinite(blowForce) ? clamp01(blowForce) : 0;
+}
+
 void lettersUpdate(float seconds) {
-  current->time += seconds;
-  if (phase == DISSOLVING && nextReady) incoming->time += seconds;
+  if (!isfinite(seconds) || seconds < 0) seconds = 0;
+  const float motionSeconds = seconds * responseSpeed;
+  current->time += motionSeconds;
+  if (phase == DISSOLVING && nextReady) incoming->time += motionSeconds;
   transitionTime += seconds;
   const float duration = phase == DISSOLVING ? .65f : .55f;
   progress = clamp01(transitionTime / duration);
@@ -285,7 +293,7 @@ bool lettersTransitionDone() {
   return phase == READING || (phase == DISSOLVING && progress >= 1);
 }
 void lettersDraw() {
-  gfx->fillScreen(C_BLACK);
+  atmosphereDraw();
   if (!current->valid) {
     displayCenter("poem does not fit", 140, 1, C_WHITE, C_BLACK);
     displayCenter("check poetry database", 160, 1, C_GREY, C_BLACK);
@@ -327,12 +335,16 @@ void lettersDraw() {
       if (phase == ASSEMBLING) brightness *= 1 - p.blend;
       if (phase == DISSOLVING && item.scene == current) brightness *= p.blend;
     }
-    if (brightness > .003f) drawParticle(*item.scene, item.particle, grey(brightness));
+    if (brightness > .003f) drawParticle(*item.scene, item.particle, brightness);
   }
   if (phase == ASSEMBLING || phase == READING || phase == DISSOLVING) {
     const float opacity = phase == READING ? 1 : phase == ASSEMBLING ? eased : 1 - eased;
-    displayCenter(current->poem->by, (int)current->layout.authorY, 1,
-                  grey(.38f * opacity), C_BLACK);
+    const char *author = current->poem->by;
+    const int y = (int)current->layout.authorY;
+    gfx->setTextSize(1);
+    gfx->setTextColor(atmosphereInk(.38f * opacity, 120, y));
+    gfx->setCursor((LCD_W - (int)strlen(author) * 6) / 2, y);
+    for (const char *c = author; *c; c++) gfx->write((uint8_t)*c);
   }
 }
 int lettersCount() { return current->count; }

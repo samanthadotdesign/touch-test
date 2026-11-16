@@ -1,0 +1,9 @@
+ES8311 register configuration in src/audio_input.cpp is adapted from:
+https://github.com/espressif/esp-adf/blob/master/components/esp_codec_dev/device/es8311/es8311.c
+
+SPDX-FileCopyrightText: 2023 Espressif Systems (Shanghai) CO LTD
+SPDX-License-Identifier: Apache-2.0
+
+Modifications: fixed LCDwiki ES3C28P microphone configuration, staged nonblocking
+register writes, bounded DMA reads, RMS measurement, and input lifecycle handling.
+See LICENSE in this directory for the Apache License, Version 2.0.

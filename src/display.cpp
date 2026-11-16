@@ -58,6 +58,7 @@ void displayFlush() {
 }
 
 bool displayUsingCanvas() { return useCanvas; }
+uint16_t *displayFramebuffer() { return useCanvas ? canvas->getFramebuffer() : nullptr; }
 
 void displayCenter(const char *s, int16_t y, uint8_t size, uint16_t fg, uint16_t bg) {
   int16_t w = (int16_t)strlen(s) * 6 * size;

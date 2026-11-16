@@ -1,0 +1,46 @@
+name: ESP32 firmware
+
+on:
+  push:
+    branches: [main, 'codex/**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  firmware:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install tools and dependencies
+        run: |
+          python -m venv .venv
+          .venv/bin/python -m pip install platformio==6.2.0
+          npm ci
+      - name: Check browser and poetry source
+        run: |
+          npm test
+          python scripts/generate_poetry.py --check
+          npm run build:background
+          git diff --exit-code -- sandbox/background.bundle.js
+      - name: Build and package ESP32 firmware
+        run: ./pio run
+      - name: Check native firmware controls and microphone driver
+        run: bash scripts/test_native.sh
+      - name: Upload ready-to-flash firmware
+        uses: actions/upload-artifact@v4
+        with:
+          name: esp32s3-firmware
+          path: .pio/build/esp32s3/firmware-package/*
+          if-no-files-found: error
+          retention-days: 90

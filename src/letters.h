@@ -5,6 +5,7 @@
 bool lettersLoadPoem(const Poem &poem, const MotionPreset &motion);
 bool lettersPrepareNext(const Poem &poem, const MotionPreset &motion);
 void lettersAdoptNext();
+void lettersSetResponse(float motionScale, float blowForce);
 void lettersUpdate(float seconds);
 void lettersAssemble();
 void lettersDissolve();

@@ -8,9 +8,14 @@
 #include "display.h"
 #include "poetry_layout.h"
 #include "poetry_motion.h"
+#include "atmosphere.h"
+#include <Preferences.h>
 
 uint32_t nowMs = 0;
 bool fingerDown = false;
+int16_t touchX = 120, touchY = 160;
+bool microphoneAvailable = true, microphoneEnabled = false;
+float microphoneLevel = 0;
 TestSerial Serial;
 Arduino_GFX testGfx;
 Arduino_GFX *gfx = &testGfx;
@@ -19,15 +24,33 @@ long random(long upper) { return rand() % upper; }
 void randomSeed(unsigned long seed) { srand(seed); }
 void displayBegin() {}
 void displayFlush() {}
+uint16_t *displayFramebuffer() { testGfx.glyphWrites.clear(); return nullptr; }
 void displayCenter(const char *, int16_t, uint8_t, uint16_t, uint16_t) {}
 void touchBegin() {}
-bool touchRead(int16_t &x, int16_t &y) { x = 120; y = 160; return fingerDown; }
+bool touchRead(int16_t &x, int16_t &y) { x = touchX; y = touchY; return fingerDown; }
+bool touchInRect(int16_t x, int16_t y, int16_t rx, int16_t ry, int16_t rw, int16_t rh) {
+  return x >= rx && x < rx + rw && y >= ry && y < ry + rh;
+}
+bool audioInputBegin() { microphoneEnabled = false; return microphoneAvailable; }
+bool audioInputSetEnabled(bool enabled) {
+  microphoneEnabled = enabled && microphoneAvailable;
+  return !enabled || microphoneAvailable;
+}
+bool audioInputAvailable() { return microphoneAvailable; }
+bool audioInputEnabled() { return microphoneEnabled; }
+float audioInputLevel() { return microphoneEnabled ? microphoneLevel : 0; }
+void audioInputUpdate() {}
 void advance(int ms) {
   for (int t = 0; t < ms; t += 20) { nowMs += 20; appUpdate(); }
 }
 void tap() { fingerDown = true; advance(20); fingerDown = false; advance(20); }
+void tapAt(int16_t x, int16_t y) {
+  touchX = x; touchY = y; tap(); touchX = 120; touchY = 160;
+}
 
 int main() {
+  Preferences::clearAll();
+  atmosphereBegin();
   PoetryLayout layout;
   assert(poetryLayout("two words\none", layout));
   assert(layout.size == 1 && layout.count == 3);
@@ -131,7 +154,7 @@ int main() {
     for (int i = 0; i < 180; i++) {
       const WordPose field = poetryFieldMotion(m, i, 180, seconds, i % 4 == 0 ? 24 : 6, seed);
       assert(isfinite(field.x) && isfinite(field.y) && isfinite(field.z));
-      assert(field.scale >= .55f && field.scale <= 1.1f);
+      assert(field.scale >= .66f && field.scale <= 1.1f);
       const float q = m.perspective / (m.perspective - field.z);
       const float sx = field.x * q, sy = field.y * q;
       assert(sx >= -116 && sx <= 116 && sy >= -154 && sy <= 154);
@@ -280,6 +303,53 @@ int main() {
   lettersAdoptNext();
   assert(lettersCount() == expectedParticles);
 
+  // The deployed field shares the browser's outward fan and 20% larger floor.
+  for (const auto &m : MOTIONS) for (uint32_t seed : {0u, 8u, 12u, 42u}) {
+    for (int i = 0; i < 180; i++) {
+      const float width = i % 4 == 0 ? 48.f : 6.f;
+      const WordPose base = poetryFieldMotion(m, i, 180, 4, width, seed);
+      const WordPose zero = poetryBreathMotion(m, base, i, width, seed, 0);
+      assert(base.x == zero.x && base.y == zero.y && base.scale == zero.scale);
+      assert(base.scale >= .66f && base.scale <= 1.1f);
+      const float q = m.perspective / (m.perspective - base.z);
+      float previousDistance = hypotf(base.x * q, base.y * q);
+      const float limitX = fmaxf(6, 116 - fminf(104, width * base.scale * q * .55f));
+      const float limitY = fmaxf(20, 154 - 4 * base.scale * q);
+      for (float force : {.3f, .6f, 1.f}) {
+        const WordPose pushed = poetryBreathMotion(m, base, i, width, seed, force);
+        assert(isfinite(pushed.x) && isfinite(pushed.y));
+        assert(pushed.z == base.z && pushed.scale == base.scale);
+        assert(fabsf(pushed.x * q) <= limitX + .001f);
+        assert(fabsf(pushed.y * q) <= limitY + .001f);
+        const float distance = hypotf(pushed.x * q, pushed.y * q);
+        assert(distance + .001f >= previousDistance);
+        previousDistance = distance;
+      }
+    }
+  }
+  assert(lettersLoadPoem(fixedPoem, mixedMotion));
+  lettersSetResponse(5, 1);
+  lettersUpdate(.1f);
+  assert(fabsf(lettersInfo().time - .5f) < .001f);
+  lettersAssemble(); lettersUpdate(.54f);
+  assert(!lettersTransitionDone());
+  lettersUpdate(.01f);
+  assert(lettersTransitionDone());
+  assert(lettersInfo().minScale == 1 && lettersInfo().maxScale == 1);
+  assert(lettersPrepareNext(fixedPoem, mixedMotion));
+  lettersDissolve(); lettersUpdate(.64f);
+  assert(!lettersTransitionDone());
+  lettersUpdate(.01f);
+  assert(lettersTransitionDone());
+  const float scaledIncoming = lettersInfo().nextTime;
+  assert(fabsf(scaledIncoming - 3.25f) < .001f);
+  lettersAdoptNext();
+  assert(fabsf(lettersInfo().time - scaledIncoming) < .001f);
+  lettersSetResponse(NAN, INFINITY); // invalid response cannot contaminate poses
+  lettersUpdate(.1f);
+  assert(fabsf(lettersInfo().time - scaledIncoming - .1f) < .001f);
+  lettersSetResponse(1, 0);
+
   appBegin();
   assert(appState() == ST_MOVING);
   advance(10000);
@@ -311,5 +381,88 @@ int main() {
   assert(appState() == ST_READING);
   advance(10000);
   assert(appState() == ST_READING); // readable poem holds indefinitely
-  puts("PASS: layouts, 8 motions, 3D projection, renderer, touch/hold cycle");
+
+  // The corner is invisible during normal use and consumes its opening press.
+  advance(300); tapAt(220, 300);
+  assert(appMenuVisible() && appState() == ST_READING);
+  advance(300); tapAt(120, 132);
+  assert(atmosphereTheme() == ATM_NIGHT && appMenuVisible());
+  const float originalThreshold = atmosphereThreshold();
+  advance(300); tapAt(170, 273);
+  assert(fabsf(atmosphereThreshold() - originalThreshold + .05f) < .001f);
+  const float savedThreshold = atmosphereThreshold();
+  advance(300); tapAt(120, 50); // outside sheet closes without changing poem
+  assert(!appMenuVisible() && appState() == ST_READING);
+  const int themeGlyphsBefore = testGfx.glyphs;
+  advance(300); tapAt(220, 300);
+  assert(appMenuVisible());
+  advance(6100);
+  assert(!appMenuVisible() && appState() == ST_READING);
+  assert(testGfx.glyphs > themeGlyphsBefore);
+  appBegin(); // NVS preferences survive reboot; microphone never auto-starts.
+  assert(atmosphereTheme() == ATM_NIGHT);
+  assert(fabsf(atmosphereThreshold() - savedThreshold) < .001f);
+  assert(!microphoneEnabled && appState() == ST_MOVING && !appMenuVisible());
+
+  // Enabling a quiet microphone only enables the response, never navigation.
+  advance(300); tapAt(220, 300);
+  advance(300); tapAt(60, 245);
+  assert(microphoneEnabled && appState() == ST_MOVING);
+  advance(300); tapAt(220, 100);
+  assert(!appMenuVisible());
+  advance(1200);
+  assert(appState() == ST_MOVING);
+  microphoneLevel = 1;
+  for (int i = 0; i < 75 && appState() == ST_MOVING; i++) advance(20);
+  assert(appState() == ST_ASSEMBLING);
+  advance(520); assert(appState() == ST_ASSEMBLING);
+  advance(60); assert(appState() == ST_READING);
+  advance(4000); assert(appState() == ST_READING); // held breath triggers once
+  assert(lettersInfo().minScale == 1 && lettersInfo().maxScale == 1);
+
+  microphoneLevel = 0;
+  advance(2200);
+  advance(300); tapAt(220, 300);
+  advance(300); tapAt(60, 245); // disable
+  assert(!microphoneEnabled && appState() == ST_READING);
+  advance(300); tapAt(60, 245); // re-enable in a quiet room
+  assert(microphoneEnabled && appState() == ST_READING);
+  advance(300); tapAt(220, 100);
+  advance(1200); assert(appState() == ST_READING);
+  const std::string breathOutgoing = lettersInfo().poemId;
+  microphoneLevel = 1;
+  for (int i = 0; i < 75 && appState() == ST_READING; i++) advance(20);
+  assert(appState() == ST_DISSOLVING);
+  advance(620); assert(appState() == ST_DISSOLVING);
+  advance(60); assert(appState() == ST_MOVING);
+  assert(breathOutgoing != lettersInfo().poemId);
+  advance(2500); assert(appState() == ST_MOVING);
+
+  // A touch and an already-latched breath on the final dissolve frame are
+  // both consumed by that transition, never replayed into the incoming poem.
+  microphoneLevel = 0;
+  advance(2200);
+  tap(); advance(600);
+  assert(appState() == ST_READING);
+  advance(300); tap(); advance(620);
+  assert(appState() == ST_DISSOLVING); // .64 seconds, just before handoff
+  atmosphereBegin(); // Prime a fresh detector without advancing the app clock.
+  microphoneLevel = 1;
+  for (int i = 0; i < 8; i++) atmosphereUpdate(.1f, microphoneLevel, true);
+  assert(atmosphereLevel() > .99f);
+  fingerDown = true; advance(20);
+  assert(appState() == ST_MOVING);
+  fingerDown = false; advance(20);
+  assert(appState() == ST_MOVING); // a short-circuited pending blow would assemble
+  advance(1000);
+  assert(appState() == ST_MOVING && !atmosphereTakeBlow());
+
+  // Hardware failure leaves tap controls and the menu usable.
+  microphoneAvailable = false; microphoneLevel = 0;
+  appBegin(); advance(300); tapAt(220, 300);
+  advance(300); tapAt(60, 245);
+  assert(!microphoneEnabled && appMenuVisible() && appState() == ST_MOVING);
+  advance(6100); assert(!appMenuVisible());
+  advance(300); tap(); assert(appState() == ST_ASSEMBLING);
+  puts("PASS: layouts, motion, 20% fragment floor, breath fan/timing, hidden themes and mic/tap controls");
 }

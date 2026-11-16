@@ -125,7 +125,8 @@ inline WordPose poetryFieldMotion(const MotionPreset &m, int index, int count,
   v.rx = .45f * sinf(v.rx) + .15f * m.tilt * sinf(t * rate * .15f + phaseZ);
   v.ry = .45f * sinf(v.ry) + .15f * m.tilt * cosf(t * rate * .13f + phaseX);
   v.rz = .12f * sinf(v.rz) + .08f * m.spin * sinf(t * rate * .11f + phaseY);
-  v.scale = .55f + .55f * r(27) * r(27);
+  // Lift the smallest fragments 20% above the original .55 scale.
+  v.scale = .66f + .44f * r(27) * r(27);
   const float gX = r(14) + r(15) + r(16) - 1.5f;
   const float gY = r(17) + r(18) + r(19) - 1.5f;
   float sx, sy;
@@ -178,6 +179,31 @@ inline WordPose poetryFieldMotion(const MotionPreset &m, int index, int count,
   const float limitY = fmaxf(20, 154 - 4 * v.scale * q);
   v.x = fmaxf(-limitX, fminf(limitX, sx)) / q;
   v.y = fmaxf(-limitY, fminf(limitY, sy)) / q;
+  return v;
+}
+
+// Breath pressure fans every fragment away from the display centre in screen
+// pixels. Each particle's fan angle stays seeded, including in offset knots.
+inline WordPose poetryBreathMotion(const MotionPreset &m, WordPose v, int index,
+                                   float width, uint32_t seed, float force) {
+  if (!isfinite(force) || force <= 0) return v;
+  force = fminf(force, 1);
+  const float q = m.perspective / (m.perspective - v.z);
+  const float sx = v.x * q, sy = v.y * q;
+  const float distance = hypotf(sx, sy);
+  const float phase = distance > 1e-6f ? atan2f(sy, sx)
+      : poetryRandom(seed, index, 80) * 6.28318530718f;
+  const float fan = (poetryRandom(seed, index, 82) * 2 - 1) * .95f;
+  const float nx = cosf(phase + fan), ny = sinf(phase + fan);
+  const float limitX = fmaxf(6, 116 - fminf(104, width * v.scale * q * .55f));
+  const float limitY = fmaxf(20, 154 - 4 * v.scale * q);
+  const float roomX = fabsf(nx) > 1e-6f ? ((nx > 0 ? limitX : -limitX) - sx) / nx : INFINITY;
+  const float roomY = fabsf(ny) > 1e-6f ? ((ny > 0 ? limitY : -limitY) - sy) / ny : INFINITY;
+  const float headroom = fmaxf(0, fminf(roomX, roomY));
+  const float push = force * (45 + 60 * poetryRandom(seed, index, 81));
+  const float outward = headroom > 0 ? -headroom * expm1f(-push / headroom) : 0;
+  v.x += nx * outward / q;
+  v.y += ny * outward / q;
   return v;
 }
 
