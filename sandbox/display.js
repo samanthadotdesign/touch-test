@@ -1,14 +1,18 @@
 /* Shared 240 x 320 bitmap display used by the studio and device prototype. */
 (function (root) {
   'use strict';
-  function createRenderer(canvas,font) {
+  function createRenderer(canvas,font,options={}) {
     const {displayText,project,shade}=root.PoetryEngine;
-    const ctx=canvas.getContext('2d',{alpha:false});
+    const transparent=options.transparent===true;
+    const ctx=canvas.getContext('2d',{alpha:transparent});
+    let lightInk=true;
     function glyphs(text,callback){for(let c=0;c<text.length;c++){const glyph=font[text.charCodeAt(c)-32];if(!glyph)continue;for(let col=0;col<5;col++){const bits=glyph[col];for(let row=0;row<8;){if(!(bits&(1<<row))){row++;continue;}const first=row;while(row<8&&(bits&(1<<row)))row++;callback(c*6+col,first,1,row-first);}}}}
     function grey(amount){const g=Math.floor(Math.max(0,Math.min(1,amount))*255);return `rgb(${(g>>3)*255/31},${(g>>2)*255/63},${(g>>3)*255/31})`;}
-    function author(experience,opacity){ctx.fillStyle=grey(.38*opacity);const text=displayText(experience.poem.by),x=(240-text.length*6)/2,y=experience.arrangement.authorY;glyphs(text,(gx,gy,w,h)=>ctx.fillRect(Math.trunc(x+gx),Math.trunc(y+gy),w,h));}
+    function ink(amount){if(!transparent)return grey(amount);const value=lightInk?255:0;return `rgba(${value},${value},${value},${Math.max(0,Math.min(1,amount))})`;}
+    function author(experience,opacity){ctx.fillStyle=ink(.38*opacity);const text=displayText(experience.poem.by),x=(240-text.length*6)/2,y=experience.arrangement.authorY;glyphs(text,(gx,gy,w,h)=>ctx.fillRect(Math.trunc(x+gx),Math.trunc(y+gy),w,h));}
     return function render(experience){
-      ctx.fillStyle='#000';ctx.fillRect(0,0,240,320);
+      if(transparent){lightInk=(options.getTheme?.()??'dark')==='dark';ctx.clearRect(0,0,240,320);}
+      else{ctx.fillStyle='#000';ctx.fillRect(0,0,240,320);}
       // Both poems share one depth-sorted space during a change.
       const layers=experience.layers();
       const order=layers.flatMap(layer=>layer.poses.map((pose,i)=>({pose,unit:experience.units(layer.scene)[i],layer}))).sort((a,b)=>a.pose.z-b.pose.z);
@@ -21,7 +25,7 @@
         brightness*=opacity;
         if(unit.echo){brightness*=.78;if(mode==='ASSEMBLING')brightness*=1-settling;else if(mode==='READING')brightness=0;else if(mode==='DISSOLVING')brightness*=settling;}
         if(brightness<.003)continue;
-        ctx.fillStyle=grey(brightness);
+        ctx.fillStyle=ink(brightness);
         glyphs(unit.text,(gx,gy,w,h)=>{
           const x=gx*size-width/2,y=gy*size-4*size;
           if(mode==='READING'){ctx.fillRect(Math.trunc(120+pose.x+x),Math.trunc(160+pose.y+y),w*size,h*size);return;}

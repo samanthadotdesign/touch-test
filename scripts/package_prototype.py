@@ -19,7 +19,10 @@ import tarfile
 
 ROOT = Path(__file__).resolve().parents[1]
 PROTOTYPE_FILES = ("index.html", "prototype.css", "prototype.js")
-SHARED_FILES = ("poetry-data.js", "engine.js", "library-store.js", "display.js")
+SHARED_FILES = (
+    "poetry-data.js", "engine.js", "library-store.js", "display.js",
+    "atmosphere.js", "atmosphere.css", "background.bundle.js",
+)
 
 
 def read_source(relative):
@@ -40,7 +43,8 @@ def collect_files():
     files = {name: read_source(Path("prototype") / name) for name in PROTOTYPE_FILES}
     html = files["index.html"].decode("utf-8")
     for quote in ('"', "'"):
-        html = html.replace(f"src={quote}../sandbox/", f"src={quote}sandbox/")
+        for attribute in ("src", "href"):
+            html = html.replace(f"{attribute}={quote}../sandbox/", f"{attribute}={quote}sandbox/")
     files["index.html"] = html.encode("utf-8")
     for name in SHARED_FILES:
         files[f"sandbox/{name}"] = read_source(Path("sandbox") / name)

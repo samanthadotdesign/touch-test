@@ -1,0 +1,16 @@
+{
+  "name": "airplane-mode-poetry-sandbox",
+  "private": true,
+  "scripts": {
+    "build:background": "esbuild sandbox/background.tsx --bundle --minify --format=iife --target=es2022 --outfile=sandbox/background.bundle.js",
+    "test": "node --test test/*.test.cjs"
+  },
+  "dependencies": {
+    "@figma/expressive-components": "^0.2.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.12"
+  }
+}

@@ -191,7 +191,7 @@
     const q=camera/(camera-z);return [120+(position.x+x3)*q,160+(position.y+y3)*q];
   }
   class Experience {
-    constructor(library,random=Math.random){this.library=validateLibrary(library);this.random=random;this.poemIndex=-1;this.animationIndex=-1;this.pick();}
+    constructor(library,random=Math.random){this.library=validateLibrary(library);this.random=random;this.blowForce=0;this.poemIndex=-1;this.animationIndex=-1;this.pick();}
     different(count,last){if(count<2)return 0;if(last<0)return Math.floor(this.random()*count);const n=Math.floor(this.random()*(count-1));return n>=last?n+1:n;}
     chooseLayout(poem){if(poem.layout!=='random')return layout(poem.text,poem.layout);const eligible=LAYOUTS.flatMap(name=>{try{return[layout(poem.text,name)];}catch(error){return[];}});const choices=eligible.length>1?eligible.filter(a=>a.layoutName!==this.arrangement?.layoutName):eligible;return choices[Math.floor(this.random()*choices.length)];}
     makeScene(poemIndex,animationIndex){const poem=this.library.poems[poemIndex],motion={...this.library.animations[animationIndex]};return{poemIndex,animationIndex,poem,motion,arrangement:this.chooseLayout(poem),time:0,seed:Math.floor(this.random()*4294967296)>>>0};}
@@ -202,7 +202,20 @@
     resumeMotion(){this.mode='MOVING';this.age=0;this.next=null;}
     previewLayout(value){const poem={...this.poem,layout:value},arrangement=this.chooseLayout(poem),reading=this.mode==='READING';this.poem=poem;this.arrangement=arrangement;this.resumeMotion();if(reading)this.mode='READING';}
     units(scene=this){return buildUnits(scene.arrangement,scene.motion.unit,scene.seed);}
-    moving(scene=this){const units=this.units(scene);return units.map((unit,i)=>fieldPose(i,units.length,scene.time,scene.motion,unit.width,scene.seed));}
+    moving(scene=this){const units=this.units(scene),force=this.blowForce;return units.map((unit,i)=>{
+      const position=fieldPose(i,units.length,scene.time,scene.motion,unit.width,scene.seed);if(!force)return position;
+      // Expand around the display centre in screen pixels, independent of depth.
+      const q=scene.motion.perspective/(scene.motion.perspective-position.z),sx=position.x*q,sy=position.y*q,distance=Math.hypot(sx,sy);
+      const phase=distance>1e-6?Math.atan2(sy,sx):particleRandom(scene.seed,i,80)*Math.PI*2;
+      // A stable individual fan breaks up offset knots while every ray still points outwards.
+      const fan=(particleRandom(scene.seed,i,82)*2-1)*.95,nx=Math.cos(phase+fan),ny=Math.sin(phase+fan);
+      const limitX=Math.max(6,116-Math.min(104,unit.width*position.scale*q*.55)),limitY=Math.max(20,154-4*position.scale*q);
+      const roomX=Math.abs(nx)>1e-6?((nx>0?limitX:-limitX)-sx)/nx:Infinity,roomY=Math.abs(ny)>1e-6?((ny>0?limitY:-limitY)-sy)/ny:Infinity;
+      const headroom=Math.max(0,Math.min(roomX,roomY)),push=force*(45+60*particleRandom(scene.seed,i,81));
+      // Approach the safe edge softly; a strong breath keeps the field visible.
+      const outward=headroom>0?-headroom*Math.expm1(-push/headroom):0;
+      position.x+=nx*outward/q;position.y+=ny*outward/q;return position;
+    });}
     poses(){
       const moving=this.moving(),units=this.units();
       if(this.mode==='MOVING')return moving;
@@ -224,7 +237,7 @@
       if(this.mode==='MOVING'){this.mode='ASSEMBLING';this.age=0;return true;}
       this.next=this.makeScene(this.different(this.library.poems.length,this.poemIndex),this.different(this.library.animations.length,this.animationIndex));this.mode='DISSOLVING';this.age=0;return true;
     }
-    step(dt){dt=clamp(dt,0,.1);this.time+=dt;this.age+=dt;if(this.next)this.next.time+=dt;
+    step(dt,motionScale=1,blowForce=0){this.blowForce=clamp(Number.isFinite(blowForce)?blowForce:0,0,1);dt=clamp(dt,0,.1);const motionDt=dt*clamp(Number.isFinite(motionScale)?motionScale:1,0,5);this.time+=motionDt;this.age+=dt;if(this.next)this.next.time+=motionDt;
       if(this.mode==='ASSEMBLING'&&this.age>=ASSEMBLE_SECONDS){this.mode='READING';this.age=0;}
       if(this.mode==='DISSOLVING'&&this.age>=CHANGE_SECONDS)this.adopt(this.next);
     }

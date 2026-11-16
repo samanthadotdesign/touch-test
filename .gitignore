@@ -9,3 +9,4 @@ compile_commands.json
 .venv/
 .platformio/
 __pycache__/
+node_modules/

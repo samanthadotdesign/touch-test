@@ -2,7 +2,12 @@
   'use strict';
   const {Experience, validateLibrary} = PoetryEngine;
   const canvas = document.querySelector('#lcd');
-  const render = PoetryDisplay.createRenderer(canvas, POETRY_FONT);
+  let experience;
+  const atmosphere = PoetryAtmosphere.createController(document.querySelector('#poetry-screen'), {
+    onBlow: () => touch()
+  });
+  PoetryBackground.mount(document.querySelector('.poetry-background'), atmosphere);
+  const render = PoetryDisplay.createRenderer(canvas, POETRY_FONT, {transparent: true, getTheme: () => atmosphere.theme});
 
   function loadLibrary() {
     const source = validateLibrary(structuredClone(POETRY_DATA));
@@ -15,7 +20,7 @@
     }
   }
 
-  let experience = new Experience(loadLibrary());
+  experience = new Experience(loadLibrary());
   let last = performance.now();
   let lastMode = '';
 
@@ -25,16 +30,17 @@
     const reading = mode === 'READING';
     const transitioning = mode === 'ASSEMBLING' || mode === 'DISSOLVING';
     const description = reading
-      ? experience.poem.text + ' By ' + experience.poem.by + '. Touch for another poem.'
-      : transitioning ? 'The words are moving into place.' : 'Touch to assemble the poem.';
+      ? experience.poem.text + ' By ' + experience.poem.by + '. Touch or blow again for another poem.'
+      : transitioning ? 'The words are moving into place.' : 'Touch to assemble the poem, or blow above the threshold with the mic enabled.';
     canvas.setAttribute('aria-label', 'Poetry display. ' + description);
     canvas.setAttribute('aria-disabled', String(transitioning));
     lastMode = mode;
   }
 
   function touch() {
-    experience.touch();
+    const accepted = experience.touch();
     syncAccessibility();
+    return accepted;
   }
 
   canvas.addEventListener('pointerdown', event => {
@@ -61,7 +67,8 @@
   document.addEventListener('visibilitychange', () => { last = performance.now(); });
 
   function frame(now) {
-    experience.step((now - last) / 1000);
+    const seconds = (now - last) / 1000;
+    experience.step(seconds, atmosphere.step(seconds), atmosphere.blowForce);
     last = now;
     render(experience);
     syncAccessibility();

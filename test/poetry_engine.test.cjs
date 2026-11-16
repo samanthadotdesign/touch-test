@@ -31,6 +31,97 @@ test('poem changes overlap in one 3D field and preserve incoming motion time',()
  for(let i=0;i<64;i++){e.step(.01);layers=e.layers();assert.equal(layers.length,2);close(layers[0].opacity+layers[1].opacity,1);assert.ok(layers[0].opacity>0&&layers[1].opacity>0);assert.ok(layers.every(l=>l.poses.length>0));}
  const incoming=e.next;e.step(.01);assert.equal(e.mode,'MOVING');assert.equal(e.poem.id,incoming.poem.id);close(e.time,.65);assert.deepEqual(e.poses(),e.moving(incoming));
 });
+test('responsive motion changes accumulated scene time without changing transition durations',()=>{
+ for(const scale of [0,2,5]){
+  const e=new Experience(clone(),()=>.3);e.step(.1);close(e.time,.1);
+  e.step(.1,scale);close(e.time,.1+.1*scale);
+  e.touch();for(let i=0;i<54;i++)e.step(.01,scale);assert.equal(e.mode,'ASSEMBLING');
+  e.step(.01,scale);assert.equal(e.mode,'READING');
+  e.touch();const outgoingTime=e.time,incoming=e.next;
+  for(let i=0;i<64;i++)e.step(.01,scale);
+  assert.equal(e.mode,'DISSOLVING');close(e.time,outgoingTime+.64*scale);close(incoming.time,.64*scale);
+  e.step(.01,scale);assert.equal(e.mode,'MOVING');close(e.time,.65*scale);assert.equal(e.poem.id,incoming.poem.id);
+ }
+});
+test('responsive motion clamps excessive and negative scale and ignores nonfinite scale',()=>{
+ const e=new Experience(clone(),()=>.3);
+ for(const [scale,expected] of [[-2,0],[12,.5],[NaN,.1],[Infinity,.1],[-Infinity,.1]]){
+  const before=e.time;e.step(.1,scale);close(e.time-before,expected);
+ }
+ const before=e.time;e.step(.1,0);e.step(.1,2);close(e.time,before+.2);
+ assert.ok(e.poses().every(p=>Object.values(p).every(Number.isFinite)));
+});
+test('zero breath preserves every original fragment pose and breath spreads all formations outwards',()=>{
+ const e=new Experience(clone(),()=>.3);e.seed=8;
+ const screenRadius=position=>{const [x,y]=project(0,0,position,e.motion.perspective);return Math.hypot(x-120,y-160);};
+ for(const formation of FORMATIONS){
+  e.motion.formation=formation;e.step(0,1,0);const units=e.units(),base=e.moving();
+  assert.deepEqual(base,units.map((unit,i)=>fieldPose(i,units.length,e.time,e.motion,unit.width,e.seed)));
+  e.step(0,1,.3);const gentle=e.moving();e.step(0,1,1);const strong=e.moving();
+  let increase=0,realMoved=0,echoMoved=0;
+  for(let i=0;i<strong.length;i++){
+   const start=screenRadius(base[i]),middle=screenRadius(gentle[i]),end=screenRadius(strong[i]);
+   assert.ok(middle>=start-1e-8);assert.ok(end>=middle-1e-8);increase+=end-start;
+   if(end-start>1e-6){if(units[i].echo)echoMoved++;else realMoved++;}
+   const point=project(0,0,strong[i],e.motion.perspective);assert.ok(point.every(Number.isFinite));assert.ok(point[0]>=0&&point[0]<=240&&point[1]>=0&&point[1]<=320);
+   assert.equal(strong[i].z,base[i].z);assert.equal(strong[i].scale,base[i].scale);
+  }
+  assert.ok(increase/strong.length>10);assert.ok(realMoved>0&&echoMoved>0);
+  assert.deepEqual(e.moving(),strong);
+  e.step(0,1,0);assert.deepEqual(e.moving(),base);
+ }
+});
+test('near-centre fragments separate with a stable finite direction and force stays bounded',()=>{
+ const e=new Experience(clone(),()=>.3);e.seed=8;e.motion.formation='stream';
+ const radius=position=>{const [x,y]=project(0,0,position,e.motion.perspective);return Math.hypot(x-120,y-160);};
+ const base=e.moving(),nearest=base.map(radius).indexOf(Math.min(...base.map(radius)));assert.ok(radius(base[nearest])<2);
+ e.step(0,1,1);const pushed=e.moving();assert.ok(radius(pushed[nearest])>30);assert.ok(pushed.every(p=>Object.values(p).every(Number.isFinite)));
+ const same=new Experience(clone(),()=>.3);same.seed=e.seed;same.motion.formation='stream';same.step(0,1,1);assert.deepEqual(same.moving(),pushed);
+ e.step(0,1,3);assert.equal(e.blowForce,1);assert.deepEqual(e.moving(),pushed);
+ for(const force of [-1,NaN,Infinity]){e.step(0,1,force);assert.equal(e.blowForce,0);assert.deepEqual(e.moving(),base);}
+});
+test('a breath fans offset condensed knots apart instead of translating them together',()=>{
+ const e=new Experience(clone(),()=>.3);e.motion.formation='cluster';
+ const screen=positions=>positions.map(position=>project(0,0,position,e.motion.perspective).map((value,axis)=>value-(axis?160:120)));
+ const spread=points=>{const center=[0,1].map(axis=>points.reduce((sum,p)=>sum+p[axis],0)/points.length);return Math.sqrt(points.reduce((sum,p)=>sum+(p[0]-center[0])**2+(p[1]-center[1])**2,0)/points.length);};
+ for(const seed of [0,8,12]){
+  e.seed=seed;e.step(0,1,0);const base=screen(e.moving());e.step(0,1,.3);const gentle=screen(e.moving());e.step(0,1,.6);const strong=screen(e.moving());
+  const core=points=>points.filter((_,i)=>particleRandom(seed,i,13)<.74);assert.ok(spread(core(strong))>spread(core(base))*1.3);
+  let clockwise=0,anticlockwise=0;
+  for(let i=0;i<base.length;i++){
+   const [x,y]=base[i],dx=strong[i][0]-x,dy=strong[i][1]-y,gx=gentle[i][0]-x,gy=gentle[i][1]-y;
+   assert.ok(x*dx+y*dy>=-1e-7);assert.ok(Math.abs(dx*gy-dy*gx)<1e-6);
+   const side=x*dy-y*dx;if(side>1)clockwise++;if(side< -1)anticlockwise++;
+  }
+  assert.ok(clockwise>40&&anticlockwise>40);
+ }
+});
+test('breath respects fixed reading poses, transition durations, and both overlapping poem fields',()=>{
+ const e=new Experience(clone(),()=>.3);e.touch();for(let i=0;i<54;i++)e.step(.01,1,1);assert.equal(e.mode,'ASSEMBLING');e.step(.01,1,1);assert.equal(e.mode,'READING');
+ const reading=e.poses();for(let i=0;i<10;i++)e.step(.1,5,i%2);assert.equal(e.mode,'READING');assert.deepEqual(e.poses(),reading);
+ e.touch();const incoming=e.next;e.step(.1,1,0);const base=e.layers().map(layer=>layer.poses);e.step(0,1,1);const pushed=e.layers().map(layer=>layer.poses);
+ assert.notDeepEqual(pushed[0],base[0]);assert.notDeepEqual(pushed[1],base[1]);
+ for(let i=0;i<54;i++)e.step(.01,1,1);assert.equal(e.mode,'DISSOLVING');e.step(.01,1,1);assert.equal(e.mode,'MOVING');assert.equal(e.poem.id,incoming.poem.id);assert.equal(e.blowForce,1);
+});
+test('transparent display clears frames and uses theme ink with depth opacity',()=>{
+ const vm=require('node:vm'),environment={PoetryEngine:require('../sandbox/engine.js'),module:{exports:{}}};
+ vm.runInNewContext(fs.readFileSync(require('node:path').join(__dirname,'../sandbox/display.js'),'utf8'),environment);
+ const font=require('../data/font5x7.json').glyphs,styles=[];
+ let clears=0,theme='dark';const ctx={};
+ for(const name of ['fillRect','clearRect','beginPath','lineTo','moveTo','closePath','fill'])ctx[name]=(...args)=>{
+  assert.ok(args.every(Number.isFinite),`${name} received an invalid coordinate`);
+  if(name==='clearRect')clears++;else if(name==='fill'||name==='fillRect')styles.push(ctx.fillStyle);
+ };
+ const canvas={getContext:(kind,options)=>{assert.equal(kind,'2d');assert.equal(options.alpha,true);return ctx;}};
+ const render=environment.module.exports.createRenderer(canvas,font,{transparent:true,getTheme:()=>theme}),e=new Experience(clone(),()=>.3);
+ for(const choice of ['dark','light','colour']){
+  theme=choice;styles.length=0;render(e);
+  assert.ok(styles.length>100);assert.ok(styles.every(style=>style.startsWith(choice==='dark'?'rgba(255,255,255,':'rgba(0,0,0,')));
+  assert.ok(new Set(styles).size>1);
+ }
+ assert.equal(clears,3);
+ e.touch();advance(e,.6);styles.length=0;render(e);assert.ok(styles.length>100);assert.ok(styles.every(style=>style.startsWith('rgba(0,0,0,')));
+});
 test('random picks avoid immediate repeats and single-entry libraries still work',()=>{
  const e=new Experience(clone(),()=>.999999);assert.equal(e.poemIndex,source.poems.length-1);assert.equal(e.animationIndex,source.animations.length-1);
  for(let i=0;i<50;i++){const last=[e.poem.id,e.motion.id];e.pick();assert.notEqual(e.poem.id,last[0]);assert.notEqual(e.motion.id,last[1]);}

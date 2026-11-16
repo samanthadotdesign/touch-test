@@ -6,14 +6,20 @@
   <meta name="theme-color" content="#000000">
   <title>Airplane Mode · ESP32 prototype</title>
   <link rel="stylesheet" href="prototype.css">
+  <link rel="stylesheet" href="../sandbox/atmosphere.css">
 </head>
 <body>
-  <canvas id="lcd" width="240" height="320" role="button" tabindex="0" aria-label="Poetry display. Touch or press Enter to assemble the poem."></canvas>
+  <div class="poetry-screen" id="poetry-screen">
+    <div class="poetry-background" aria-hidden="true"></div>
+    <canvas id="lcd" width="240" height="320" role="button" tabindex="0" aria-label="Poetry display. Touch or press Enter to assemble the poem."></canvas>
+  </div>
   <noscript>Enable JavaScript to use the poetry display.</noscript>
   <script src="../sandbox/poetry-data.js"></script>
   <script src="../sandbox/engine.js"></script>
   <script src="../sandbox/library-store.js"></script>
   <script src="../sandbox/display.js"></script>
+  <script src="../sandbox/atmosphere.js"></script>
+  <script src="../sandbox/background.bundle.js"></script>
   <script src="prototype.js"></script>
 </body>
 </html>
