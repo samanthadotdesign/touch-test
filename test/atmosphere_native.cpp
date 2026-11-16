@@ -1,6 +1,5 @@
 // Host checks for the actual firmware atmosphere, independent of app/audio I/O.
-// c++ -std=c++11 -O2 -Itest/native_stubs -Isrc test/atmosphere_native.cpp \
-//   src/atmosphere.cpp -o /tmp/atmosphere-native && /tmp/atmosphere-native
+// Build and run with: bash scripts/test_native.sh
 #include "atmosphere.h"
 #include "display.h"
 #include <assert.h>
