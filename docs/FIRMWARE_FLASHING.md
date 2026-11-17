@@ -61,4 +61,6 @@ Check that Night is dark with white text and Paper is light with black text. The
 
 In reading, check that the title and author stay centred at the bottom across different body layouts. Untitled entries keep just the author; long titles wrap above it. The title's final line is at y=281 and the author is at y=295, matching the [Figma references](https://www.figma.com/design/nVvkRzyAbBU2QTXQGdhttv/motion?node-id=68-1884).
 
+Fragment and letter motion now starts at 1.36× nominal speed. Random reading includes four phrase compositions from the [layout references](https://www.figma.com/design/nVvkRzyAbBU2QTXQGdhttv/motion?node-id=68-1885), using both near-edge and spacious inset margins. The title and author keep their bottom-centre anchors.
+
 Build tests do not verify the physical microphone, display speed, touch coordinates, or flashing connection. No board has been flashed or physically verified as part of this update.

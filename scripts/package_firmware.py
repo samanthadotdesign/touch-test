@@ -54,7 +54,9 @@ def package_firmware(source, target, env):
         "for 0.06 seconds acts like a tap, revealing the poem. Release into quiet "
         "before another sound advances to the next moving poem. "
         "Reading keeps the poem/book title and author centred at the bottom. "
-        "Database labels stay in the editor; only workTitle is displayed.\n",
+        "Database labels stay in the editor; only workTitle is displayed. "
+        "Fragment and letter motion starts at 1.36x. Reading includes scattered "
+        "and alternating phrase groups with varied near-edge and inset margins.\n",
         encoding="utf-8")
     project = Path(env.subst("$PROJECT_DIR"))
     shutil.copy2(project / "docs" / "COLOURWAYS.md", destination / "COLOURWAYS.md")

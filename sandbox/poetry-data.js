@@ -136,7 +136,7 @@ globalThis.POETRY_DATA = {
       "id": "orbit",
       "name": "Orbit",
       "kind": 0,
-      "speed": 0.55,
+      "speed": 0.84,
       "spread": 96,
       "depth": 100,
       "tilt": 0.45,
@@ -149,7 +149,7 @@ globalThis.POETRY_DATA = {
       "id": "helix",
       "name": "Helix",
       "kind": 1,
-      "speed": 0.5,
+      "speed": 0.76,
       "spread": 92,
       "depth": 130,
       "tilt": 0.6,
@@ -162,7 +162,7 @@ globalThis.POETRY_DATA = {
       "id": "wave",
       "name": "Wave",
       "kind": 2,
-      "speed": 0.65,
+      "speed": 1,
       "spread": 100,
       "depth": 80,
       "tilt": 0.35,
@@ -175,7 +175,7 @@ globalThis.POETRY_DATA = {
       "id": "vortex",
       "name": "Vortex",
       "kind": 3,
-      "speed": 0.6,
+      "speed": 0.92,
       "spread": 96,
       "depth": 120,
       "tilt": 0.5,
@@ -188,7 +188,7 @@ globalThis.POETRY_DATA = {
       "id": "drift",
       "name": "Drift",
       "kind": 4,
-      "speed": 0.45,
+      "speed": 0.68,
       "spread": 98,
       "depth": 90,
       "tilt": 0.3,
@@ -201,7 +201,7 @@ globalThis.POETRY_DATA = {
       "id": "tumble",
       "name": "Tumble",
       "kind": 5,
-      "speed": 0.5,
+      "speed": 0.76,
       "spread": 92,
       "depth": 110,
       "tilt": 0.7,
@@ -214,7 +214,7 @@ globalThis.POETRY_DATA = {
       "id": "cloud",
       "name": "Cloud",
       "kind": 6,
-      "speed": 0.45,
+      "speed": 0.68,
       "spread": 96,
       "depth": 130,
       "tilt": 0.25,
@@ -227,7 +227,7 @@ globalThis.POETRY_DATA = {
       "id": "ribbon",
       "name": "Ribbon",
       "kind": 7,
-      "speed": 0.55,
+      "speed": 0.84,
       "spread": 100,
       "depth": 110,
       "tilt": 0.25,
@@ -238,6 +238,8 @@ globalThis.POETRY_DATA = {
     }
   ]
 };
+
+globalThis.POETRY_READING_LAYOUTS = [{"id":13,"key":"scattered-phrases","label":"Scattered phrases","nodeId":"68:1886","boxes":[{"x":15,"y":22,"width":97,"rows":2,"weight":6},{"x":130,"y":50,"width":104,"rows":2,"weight":5},{"x":15,"y":92,"width":150,"rows":2,"weight":8},{"x":48,"y":138,"width":163,"rows":2,"weight":12},{"x":88,"y":182,"width":48,"rows":1,"weight":2},{"x":112,"y":211,"width":114,"rows":1,"weight":5},{"x":36,"y":243,"width":93,"rows":2,"weight":6}]},{"id":14,"key":"alternating-phrases","label":"Alternating margins","nodeId":"68:1889","boxes":[{"x":119,"y":12,"width":108,"rows":2,"weight":6},{"x":10,"y":44,"width":134,"rows":2,"weight":8},{"x":119,"y":76,"width":115,"rows":2,"weight":5},{"x":10,"y":100,"width":78,"rows":2,"weight":5},{"x":119,"y":119,"width":115,"rows":2,"weight":6},{"x":10,"y":160,"width":109,"rows":2,"weight":5},{"x":119,"y":175,"width":115,"rows":2,"weight":7},{"x":10,"y":207,"width":109,"rows":3,"weight":9},{"x":119,"y":235,"width":115,"rows":2,"weight":6}]},{"id":15,"key":"open-phrases","label":"Open field","nodeId":"68:1916","boxes":[{"x":12,"y":18,"width":108,"rows":1,"weight":2},{"x":31,"y":41,"width":108,"rows":1,"weight":4},{"x":125,"y":136,"width":108,"rows":2,"weight":5},{"x":47,"y":234,"width":155,"rows":1,"weight":5}]},{"id":16,"key":"inset-phrases","label":"Spacious islands","nodeId":"68:1934","boxes":[{"x":85,"y":92,"width":81,"rows":2,"weight":6},{"x":53,"y":150,"width":108,"rows":2,"weight":5},{"x":116,"y":214,"width":90,"rows":2,"weight":5}]}];
 
 globalThis.POETRY_SOURCE_REVISION = "f3c1522d3fa011b3c04362e51725efe727bf1e8dbaee1b4d2b03ba5cf1bf4275";
 

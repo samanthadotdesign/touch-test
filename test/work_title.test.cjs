@@ -126,6 +126,7 @@ from pathlib import Path
 from scripts import generate_poetry as generator
 data = json.load(__import__("sys").stdin)
 font = (generator.ROOT / "data/font5x7.json").read_text()
+reading_layouts = (generator.ROOT / "data/reading-layouts.json").read_text()
 pages = {}
 external = '<script src="https://example.invalid/external.js?keep=1"></script>'
 unlisted = '<script src="optional-entry.js?keep=1"></script>'
@@ -141,7 +142,7 @@ with tempfile.TemporaryDirectory() as directory:
             script = (generator.ROOT / name).parent / asset
             script.parent.mkdir(parents=True, exist_ok=True)
             script.write_text('// test script: ' + asset + '\\n')
-    for name, content in {**pages, "data/font5x7.json": font, "data/poetry.json": json.dumps(data)}.items():
+    for name, content in {**pages, "data/font5x7.json": font, "data/reading-layouts.json": reading_layouts, "data/poetry.json": json.dumps(data)}.items():
         target = generator.ROOT / name
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content)

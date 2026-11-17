@@ -6,6 +6,7 @@
 #include "poetry_data.h"
 
 constexpr float POETRY_MOTION_TEMPO = 2.f;
+constexpr float POETRY_MIN_SPEED = .68f; // Nominal 1.36x at the shared tempo.
 
 struct WordPose {
   float x = 0, y = 0, z = 0;
@@ -16,7 +17,7 @@ struct WordPose {
 inline WordPose poetryMotion(const MotionPreset &m, int index, int count, float seconds) {
   const float u = (index + .5f) / count;
   const float p = index * 2.39996323f;
-  const float t = seconds * m.speed;
+  const float t = seconds * fmaxf(POETRY_MIN_SPEED, m.speed);
   WordPose v;
   float a, r;
   switch (m.kind) {
@@ -120,7 +121,7 @@ inline WordPose poetryFieldMotion(const MotionPreset &m, int index, int count,
   const float rate = .35f + 1.4f * r(3), direction = r(4) < .5f ? -1 : 1;
   const float phaseX = r(0) * pi2, phaseY = r(1) * pi2, phaseZ = r(2) * pi2;
   WordPose v = poetryMotion(m, index, count, seconds * rate * direction + phaseX * 18);
-  const float t = seconds * m.speed;
+  const float t = seconds * fmaxf(POETRY_MIN_SPEED, m.speed);
   v.z = .65f * v.z + .35f * m.depth * sinf(t * (.15f + .45f * r(11)) + phaseZ);
   v.rx = .45f * sinf(v.rx) + .15f * m.tilt * sinf(t * rate * .15f + phaseZ);
   v.ry = .45f * sinf(v.ry) + .15f * m.tilt * cosf(t * rate * .13f + phaseX);

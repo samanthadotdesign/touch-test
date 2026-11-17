@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <math.h>
+#include "reading_layouts.h"
 
 constexpr int POETRY_MAX_WORDS = 96;
 constexpr int POETRY_MAX_CHARS = 512;
@@ -80,6 +81,112 @@ inline void poetryFitBody(PoetryLayout &out) {
     out.words[i].y = minimum + (out.words[i].y + 160 - minimum) * scale + shift - 160;
 }
 
+inline bool poetryReferenceSegment(const char *text, PoetryLayout &out,
+                                    const PoetryReadingBox &box, int start, int end,
+                                    bool place = false) {
+  if (start >= end) return false;
+  const int columns = box.width / 6;
+  int row = 0, column = 0;
+  for (int i = start; i < end; i++) {
+    PoetryWord &word = out.words[i];
+    if (word.length > columns) return false;
+    int gap = column ? 1 : 0;
+    if (i > start) {
+      const PoetryWord &previous = out.words[i - 1];
+      int breaks = 0;
+      for (int p = previous.offset + previous.length; p < word.offset; p++)
+        if (text[p] == '\n') breaks++;
+      if (breaks) { row += breaks; column = gap = 0; }
+    }
+    if (column + gap + word.length > columns) { row++; column = gap = 0; }
+    if (row >= box.rows) return false;
+    column += gap;
+    if (place) {
+      word.x = box.x + column * 6 + word.length * 3 - 120;
+      word.y = box.y + row * 14 + 4 - 160;
+    }
+    column += word.length;
+  }
+  return true;
+}
+
+struct PoetryReferencePartition {
+  const char *text;
+  PoetryLayout &layout;
+  const PoetryReadingTemplate &composition;
+  uint8_t targets[9] = {};
+  int8_t memo[9][POETRY_MAX_WORDS + 1];
+  uint8_t ends[9][POETRY_MAX_WORDS + 1] = {};
+
+  PoetryReferencePartition(const char *source, PoetryLayout &out,
+                           const PoetryReadingTemplate &reference)
+      : text(source), layout(out), composition(reference) {
+    memset(memo, -1, sizeof(memo));
+    int total = 0, cumulative = 0;
+    for (int box = 0; box < composition.count; box++) total += composition.boxes[box].weight;
+    for (int box = 0; box < composition.count; box++) {
+      cumulative += composition.boxes[box].weight;
+      targets[box] = (2 * layout.count * cumulative + total) / (2 * total);
+    }
+  }
+  bool solve(int box, int start) {
+    if (box == composition.count) return start == layout.count;
+    if (memo[box][start] >= 0) return memo[box][start] != 0;
+    const int last = layout.count - (composition.count - box - 1);
+    for (int distance = 0; distance <= layout.count; distance++) {
+      for (int side = 0; side < (distance ? 2 : 1); side++) {
+        const int end = targets[box] + (side ? distance : -distance);
+        if (end <= start || end > last || (box == composition.count - 1 && end != layout.count)) continue;
+        if (!poetryReferenceSegment(text, layout, composition.boxes[box], start, end)) continue;
+        if (solve(box + 1, end)) {
+          memo[box][start] = 1;
+          ends[box][start] = end;
+          return true;
+        }
+      }
+    }
+    memo[box][start] = 0;
+    return false;
+  }
+  bool apply() {
+    int start = 0;
+    bool preferred = true;
+    for (int box = 0; box < composition.count; box++) {
+      const int end = targets[box];
+      if (!poetryReferenceSegment(text, layout, composition.boxes[box], start, end)) {
+        preferred = false; break;
+      }
+      start = end;
+    }
+    if (!preferred && !solve(0, 0)) return false;
+    start = 0;
+    for (int box = 0; box < composition.count; box++) {
+      const int end = preferred ? targets[box] : ends[box][start];
+      poetryReferenceSegment(text, layout, composition.boxes[box], start, end, true);
+      start = end;
+    }
+    return true;
+  }
+};
+
+inline bool poetryReferenceLayout(const char *text, PoetryLayout &out, uint8_t arrangement) {
+  for (const auto &composition : POETRY_READING_TEMPLATES) {
+    if (composition.id != arrangement) continue;
+    if (out.count < composition.count) return false;
+    int letters = 0, capacity = 0;
+    for (int word = 0; word < out.count; word++) letters += out.words[word].length;
+    for (int box = 0; box < composition.count; box++)
+      capacity += composition.boxes[box].rows * (composition.boxes[box].width / 6);
+    if (letters > capacity) return false;
+    PoetryReferencePartition partition(text, out, composition);
+    if (!partition.apply()) return false;
+    out.size = 1;
+    poetryFitBody(out);
+    return true;
+  }
+  return false;
+}
+
 inline bool poetryLayout(const char *text, PoetryLayout &out, uint8_t arrangement = 0,
                          const char *title = "") {
   const uint8_t size = 1;
@@ -116,6 +223,7 @@ inline bool poetryLayout(const char *text, PoetryLayout &out, uint8_t arrangemen
     widths[line] = offset + wordWidth;
   }
   if (!out.count) return false;
+  if (arrangement >= 13) return poetryReferenceLayout(text, out, arrangement);
   const int lines = line + 1;
   if (arrangement >= 3 && arrangement != 9 && arrangement != 10) {
     if (arrangement == 8 || arrangement > 12) return false; // random is resolved by the scene engine

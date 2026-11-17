@@ -160,7 +160,7 @@ test('saved library loads read-only and blocked, malformed, or invalid storage f
   const sourceApp=prototypeHarness(),saved=savedLibrary(sourceApp);
   const app=prototypeHarness({raw:JSON.stringify(saved)});
   assert.equal(app.experience.poem.text,'Saved in the motion studio');
-  assert.equal(app.experience.motion.speed,.17);assert.equal(app.writes,0);
+  assert.equal(app.experience.motion.speed,.68);assert.equal(app.writes,0);
   for(const options of [
     {blocked:true},
     {raw:'{broken'},
@@ -183,7 +183,7 @@ test('same-origin library events refresh an open prototype while unrelated stora
   const saved=savedLibrary(app,'Newly saved studio poem');
   app.storage(app.storageKey,JSON.stringify(saved));app.frame();
   assert.notEqual(app.experience,readingScene);assert.equal(app.experience.mode,'MOVING');
-  assert.equal(app.experience.poem.text,'Newly saved studio poem');assert.equal(app.experience.motion.speed,.17);
+  assert.equal(app.experience.poem.text,'Newly saved studio poem');assert.equal(app.experience.motion.speed,.68);
   app.storage(app.storageKey,'{bad');app.frame();
   assert.deepEqual(plain(app.experience.library),plain(app.source));
   app.storage(app.storageKey,JSON.stringify(saved));app.frame();

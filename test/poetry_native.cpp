@@ -16,11 +16,12 @@ bool fingerDown = false;
 int16_t touchX = 120, touchY = 160;
 bool microphoneAvailable = true, microphoneEnabled = false;
 float microphoneLevel = 0;
+long forcedRandom = -1;
 TestSerial Serial;
 Arduino_GFX testGfx;
 Arduino_GFX *gfx = &testGfx;
 uint32_t millis() { return nowMs; }
-long random(long upper) { return rand() % upper; }
+long random(long upper) { return forcedRandom >= 0 ? forcedRandom % upper : rand() % upper; }
 void randomSeed(unsigned long seed) { srand(seed); }
 void displayBegin() {}
 void displayFlush() {}
@@ -165,6 +166,140 @@ void footerLayoutAndRendering() {
   atmosphereSetTheme(ATM_COLOUR);
 }
 
+const Poem &poemNamed(const char *id) {
+  for (const auto &poem : POEMS) if (strcmp(poem.id, id) == 0) return poem;
+  assert(false && "Missing authored reference fixture");
+  return POEMS[0];
+}
+void assertAllWords(const char *text, const PoetryLayout &layout) {
+  int index = 0;
+  for (size_t p = 0; text[p];) {
+    if (text[p] == ' ' || text[p] == '\n') { p++; continue; }
+    const size_t start = p;
+    while (text[p] && text[p] != ' ' && text[p] != '\n') p++;
+    assert(index < layout.count);
+    assert(layout.words[index].offset == start && layout.words[index].length == p - start);
+    index++;
+  }
+  assert(index == layout.count);
+}
+void assertReferenceGroups(const Poem &poem, int id, const std::vector<int> &groups) {
+  const PoetryReadingTemplate *reference = nullptr;
+  for (const auto &entry : POETRY_READING_TEMPLATES) if (entry.id == id) reference = &entry;
+  assert(reference && reference->count == groups.size());
+  PoetryLayout layout;
+  assert(poetryLayout(poem.text, layout, id, poem.title));
+  assertAllWords(poem.text, layout);
+  assertBodyClearsFooter(layout);
+  int start = 0;
+  for (size_t box = 0; box < groups.size(); box++) {
+    const auto &anchor = reference->boxes[box];
+    const PoetryWord &word = layout.words[start];
+    assert(fabsf(word.x + 120 - (anchor.x + word.length * 3)) < .001f);
+    assert(fabsf(word.y + 160 - (anchor.y + 4)) < .001f);
+    for (int index = start; index < start + groups[box]; index++) {
+      const PoetryWord &placed = layout.words[index];
+      assert(placed.x + 120 - placed.length * 3 >= anchor.x - .001f);
+      assert(placed.x + 120 + placed.length * 3 <= anchor.x + anchor.width + .001f);
+      const float row = (placed.y + 160 - 4 - anchor.y) / 14;
+      assert(row >= 0 && row < anchor.rows && fabsf(row - roundf(row)) < .001f);
+    }
+    start += groups[box];
+  }
+  assert(start == layout.count);
+}
+void referenceReadingLayouts() {
+  assertReferenceGroups(poemNamed("i-went-to-the-woods"), 13, {6, 5, 8, 12, 2, 5, 6});
+  assertReferenceGroups(poemNamed("and-once-the-storm-is-over"), 14, {6, 8, 5, 5, 6, 5, 7, 9, 6});
+  const Poem &rubin = poemNamed("make-sure-the-things-we-do");
+  assertReferenceGroups(rubin, 15, {2, 4, 5, 5});
+  assertReferenceGroups(rubin, 16, {6, 5, 5});
+
+  PoetryLayout layout;
+  // A failed preferred split can still use every box without dropping words.
+  assert(poetryLayout("a a a a a a", layout));
+  const PoetryReadingTemplate fallback = {13, 3, {
+    {12, 18, 6, 1, 1}, {12, 50, 18, 1, 1}, {12, 82, 30, 1, 1}
+  }};
+  PoetryReferencePartition partition("a a a a a a", layout, fallback);
+  assert(partition.apply());
+  assert(layout.words[0].y == 18 + 4 - 160);
+  assert(layout.words[1].y == 50 + 4 - 160 && layout.words[2].y == 50 + 4 - 160);
+  assert(layout.words[3].y == 82 + 4 - 160 && layout.words[5].y == 82 + 4 - 160);
+
+  // Source blank lines count within a box; old 168px wrap boundaries do not.
+  assert(poetryLayout("one\n\ntwo", layout));
+  PoetryReadingBox box = {12, 18, 108, 2, 2};
+  assert(!poetryReferenceSegment("one\n\ntwo", layout, box, 0, 2));
+  box.rows = 3;
+  assert(poetryReferenceSegment("one\n\ntwo", layout, box, 0, 2, true));
+  assert(layout.words[1].y == 18 + 28 + 4 - 160);
+  const char *wrapped = "word word word word word word word word word";
+  assert(poetryLayout(wrapped, layout));
+  assert(poetryReferenceSegment(wrapped, layout, box, 0, 9, true));
+  assert(layout.words[8].y == 18 + 28 + 4 - 160);
+
+  const std::string longTitle = std::string(20, 'a') + " " + std::string(20, 'b') + " "
+      + std::string(18, 'c');
+  int referencesSeen[4] = {};
+  for (const auto &poem : POEMS) {
+    for (uint8_t choice = 0; choice <= POETRY_MAX_LAYOUT; choice++) {
+      if (choice == 8 || !poetryLayout(poem.text, layout, choice, longTitle.c_str())) continue;
+      assertAllWords(poem.text, layout);
+      assertBodyClearsFooter(layout);
+      if (choice < 13) continue;
+      referencesSeen[choice - 13]++;
+      for (int a = 0; a < layout.count; a++) {
+        const PoetryWord &word = layout.words[a];
+        assert(word.x + 120 - word.length * 3 >= 6);
+        assert(word.x + 120 + word.length * 3 <= 234);
+        for (int b = a + 1; b < layout.count; b++) {
+          const PoetryWord &other = layout.words[b];
+          const bool xOverlap = fabsf(word.x - other.x) < (word.length + other.length) * 3 - .001f;
+          const bool yOverlap = fabsf(word.y - other.y) < 8 - .001f;
+          assert(!xOverlap || !yOverlap);
+        }
+      }
+    }
+  }
+  for (int seen : referencesSeen) assert(seen > 0);
+  for (uint8_t choice = 13; choice <= POETRY_MAX_LAYOUT; choice++) {
+    assert(!poetryLayout("one two", layout, choice)); // all reference boxes need words
+    assert(!poetryLayout(std::string(28, 'x').c_str(), layout, choice));
+  }
+  MotionPreset whole = MOTIONS[0]; whole.unit = 1;
+  Poem selected = rubin; selected.layout = 15;
+  assert(lettersLoadPoem(selected, whole));
+  const LettersInfo initial = lettersInfo();
+  lettersAssemble(); lettersUpdate(.55f); lettersDraw();
+  assert(lettersInfo().resolvedLayout == 15 && lettersInfo().realParticles == 16);
+  assert(lettersInfo().seed == initial.seed); // reading is static; only the motion field was animated
+  assertFooterRow(rubin.by, 295);
+  const auto reading = testGfx.glyphWrites;
+  lettersUpdate(3); lettersDraw();
+  assert(reading.size() == testGfx.glyphWrites.size());
+  for (size_t i = 0; i < reading.size(); i++) {
+    assert(reading[i].ch == testGfx.glyphWrites[i].ch);
+    assert(reading[i].x == testGfx.glyphWrites[i].x && reading[i].y == testGfx.glyphWrites[i].y);
+  }
+
+  // Exercise every weighted random bucket with a fixed previous composition:
+  // each eligible reference style gets three chances and each older one one.
+  std::vector<uint8_t> weighted;
+  for (uint8_t choice = 1; choice <= POETRY_MAX_LAYOUT; choice++) {
+    if (choice == 8 || !poetryLayout(rubin.text, layout, choice, rubin.title)) continue;
+    for (int copy = 0; copy < (choice >= 13 ? 3 : 1); copy++) weighted.push_back(choice);
+  }
+  for (size_t bucket = 0; bucket < weighted.size(); bucket++) {
+    selected.layout = 0; forcedRandom = -1;
+    assert(lettersLoadPoem(selected, whole));
+    selected.layout = 8; forcedRandom = bucket;
+    assert(lettersLoadPoem(selected, whole));
+    assert(lettersInfo().resolvedLayout == weighted[bucket]);
+  }
+  forcedRandom = -1;
+}
+
 int main() {
   Preferences::clearAll();
   atmosphereBegin();
@@ -188,7 +323,7 @@ int main() {
   assert(!poetryLayout(tooMany.c_str(), layout));
   for (const auto &p : POEMS) {
     bool eligible = false;
-    for (uint8_t choice = 0; choice <= 12; choice++)
+    for (uint8_t choice = 0; choice <= POETRY_MAX_LAYOUT; choice++)
       if (choice != 8) eligible |= poetryLayout(p.text, layout, choice, p.title);
     assert(eligible);
   }
@@ -265,12 +400,13 @@ int main() {
     }
   }
   footerLayoutAndRendering();
+  referenceReadingLayouts();
   Poem randomized = fixedPoem; randomized.layout = 8;
   int previousResolved = -1;
   assert(lettersLoadPoem(randomized, MOTIONS[0]));
   for (int i = 0; i < 16; i++) {
     const int resolved = lettersInfo().resolvedLayout;
-    assert(resolved >= 0 && resolved <= 12 && resolved != 8 && resolved != previousResolved);
+    assert(resolved >= 0 && resolved <= POETRY_MAX_LAYOUT && resolved != 8 && resolved != previousResolved);
     lettersUpdate(.2f);
     assert(lettersInfo().resolvedLayout == resolved); // stable within scene
     previousResolved = resolved;
@@ -283,7 +419,7 @@ int main() {
     for (float seconds : {0.f, 5.f, 20.f}) {
     bool cells[48] = {};
     int occupied = 0, inCore = 0, outliers = 0, onStream = 0, onPatch = 0;
-    const float t = seconds * m.speed * POETRY_MOTION_TEMPO;
+    const float t = seconds * fmaxf(POETRY_MIN_SPEED, m.speed) * POETRY_MOTION_TEMPO;
     const float globalP = poetryRandom(seed, 0, 60) * 6.28318530718f;
     const float coreX = (poetryRandom(seed, 0, 61) * 2 - 1) * 62 + 18 * sinf(t * .07f + globalP);
     const float coreY = (poetryRandom(seed, 0, 62) * 2 - 1) * 94 + 14 * cosf(t * .05f + globalP);

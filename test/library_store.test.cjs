@@ -2,13 +2,13 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const {STORAGE_KEY,BACKUP_KEY,loadLibrary,saveLibrary}=require('../sandbox/library-store.js');
 const poem=(id,text='Your poem',by='Author')=>({id,title:id,text,by,layout:'random'});
-const base=()=>({version:4,poems:Array.from({length:5},(_,i)=>poem('database-'+i,'Database poem '+i)),animations:[{id:'orbit',name:'Orbit',speed:.5},{id:'cloud',name:'Cloud',speed:.4}]});
+const base=()=>({version:4,poems:Array.from({length:5},(_,i)=>poem('database-'+i,'Database poem '+i)),animations:[{id:'orbit',name:'Orbit',speed:.84},{id:'cloud',name:'Cloud',speed:.68}]});
 function storage(initial){const values=new Map(Object.entries(initial||{}));return{getItem:key=>values.has(key)?values.get(key):null,setItem:(key,value)=>values.set(key,value),values};}
 const clone=value=>JSON.parse(JSON.stringify(value));
 test('legacy samples yield to the five database entries and the old value is backed up',()=>{
  const old={poems:[...require('./fixtures/poems.json'),poem('between-rain','Between the rain\nand the window,\na quiet world\nlearns to shimmer.','Original sample'),poem('unhurried','Let the day\nopen slowly.\nEven the flower\ntakes its time.','Original sample'),poem('afterwards','When words leave,\ntheir warmth stays.\nAn empty page\nis also a sky.','Original sample')],animations:[{id:'orbit',name:'Orbit',speed:.2}]};
  const raw=JSON.stringify(old),s=storage({[STORAGE_KEY]:raw}),b=base(),before=clone(b),result=loadLibrary(b,'revision-b',s);
- assert.equal(result.library.poems.length,5);assert.deepEqual(result.library.poems,b.poems);assert.equal(result.migrated,true);assert.equal(s.getItem(BACKUP_KEY),raw);assert.equal(s.getItem(STORAGE_KEY),raw);assert.deepEqual(b,before);assert.equal(result.library.animations[0].speed,.2);assert.equal(result.library.animations.length,2);
+ assert.equal(result.library.poems.length,5);assert.deepEqual(result.library.poems,b.poems);assert.equal(result.migrated,true);assert.equal(s.getItem(BACKUP_KEY),raw);assert.equal(s.getItem(STORAGE_KEY),raw);assert.deepEqual(b,before);assert.equal(result.library.animations[0].speed,.68);assert.equal(result.library.animations.length,2);
 });
 test('custom poems, edited demos and saved animation variations survive migration',()=>{
  const saved={poems:[poem('mine'),poem('small-light','My edited sample','Original sample'),poem('database-0','Old canonical text')],animations:[{id:'custom',name:'Slow drift',speed:.1}]};
@@ -35,4 +35,32 @@ test('backup failure leaves the primary storage untouched and does not request p
 });
 test('empty storage and read failures still show the source database',()=>{
  assert.deepEqual(loadLibrary(base(),'r',storage()).library,base());const result=loadLibrary(base(),'r',{getItem(){throw Error('denied');}});assert.deepEqual(result.library,base());assert.equal(result.migrated,false);assert.match(result.notice,/could not be read/);
+});
+test('untouched old built-ins adopt new defaults once, including with the same source revision',()=>{
+ const current=clone(require('../data/poetry.json'));
+ const oldSpeeds={orbit:.55,helix:.5,wave:.65,vortex:.6,drift:.45,tumble:.5,cloud:.45,ribbon:.55};
+ for(const oldRevision of ['old-revision','current-revision']){
+  const previous=clone(current);previous.animations.forEach(a=>a.speed=oldSpeeds[a.id]);
+  if(oldRevision==='current-revision')previous.poems[0].text='An explicit local poem edit';
+  const s=storage();saveLibrary(previous,oldRevision,s);const raw=s.getItem(STORAGE_KEY),before=clone(current);
+  const result=loadLibrary(current,'current-revision',s);
+  assert.deepEqual(result.library.animations,current.animations);assert.equal(result.migrated,true);
+  assert.equal(s.getItem(BACKUP_KEY),raw);assert.equal(s.getItem(STORAGE_KEY),raw);assert.deepEqual(current,before);
+  assert.equal(result.library.poems[0].text,oldRevision==='current-revision'?'An explicit local poem edit':current.poems[0].text);
+  saveLibrary(result.library,'current-revision',s);
+  const again=loadLibrary(current,'current-revision',s);assert.equal(again.migrated,false);assert.deepEqual(again.library,result.library);
+ }
+});
+test('edited built-ins and custom styles keep their parameters apart from the speed floor',()=>{
+ const current=clone(require('../data/poetry.json')),previous=clone(current);
+ const edited=previous.animations[0];edited.speed=.55;edited.spread=82;edited.name='My edited orbit';
+ previous.animations[1].speed=1.25;
+ previous.animations.push({...current.animations[0],id:'my-slow-style',name:'Slow variation',speed:.15});
+ previous.animations.push({...current.animations[0],id:'my-fast-style',name:'Fast variation',speed:1.6});
+ const s=storage();saveLibrary(previous,'older-source',s);
+ const result=loadLibrary(current,'newer-source',s).library;
+ assert.deepEqual(result.animations.find(a=>a.id==='orbit'),{...edited,speed:.68});
+ assert.deepEqual(result.animations.find(a=>a.id==='helix'),previous.animations[1]);
+ assert.deepEqual(result.animations.find(a=>a.id==='my-slow-style'),{...previous.animations.at(-2),speed:.68});
+ assert.deepEqual(result.animations.find(a=>a.id==='my-fast-style'),previous.animations.at(-1));
 });

@@ -63,9 +63,9 @@ bool prepare(Scene &scene, const Poem &poem, const MotionPreset &motion) {
   scene.count = 0;
   scene.resolvedLayout = poem.layout;
   if (poem.layout == 8) {
-    uint8_t eligible[12];
+    uint8_t eligible[POETRY_MAX_LAYOUT];
     int count = 0;
-    for (uint8_t choice = 0; choice <= 12; choice++)
+    for (uint8_t choice = 0; choice <= POETRY_MAX_LAYOUT; choice++)
       if (choice != 8 && poetryLayout(poem.text, scene.layout, choice, poem.title)) eligible[count++] = choice;
     if (count > 1) {
       for (int i = 0; i < count; i++) if (eligible[i] == previousLayout) {
@@ -74,7 +74,15 @@ bool prepare(Scene &scene, const Poem &poem, const MotionPreset &motion) {
         break;
       }
     }
-    if (count) scene.resolvedLayout = eligible[random(count)];
+    if (count) {
+      int weight = 0;
+      for (int i = 0; i < count; i++) weight += eligible[i] >= 13 ? 3 : 1;
+      int selected = random(weight);
+      for (int i = 0; i < count; i++) {
+        selected -= eligible[i] >= 13 ? 3 : 1;
+        if (selected < 0) { scene.resolvedLayout = eligible[i]; break; }
+      }
+    }
   }
   scene.valid = poetryLayout(poem.text, scene.layout, scene.resolvedLayout, poem.title);
   if (!scene.valid) {

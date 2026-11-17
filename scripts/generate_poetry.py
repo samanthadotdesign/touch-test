@@ -5,6 +5,7 @@ Run from any directory. --input imports an exported sandbox database. --check
 verifies committed generated artifacts without modifying them. No dependencies.
 """
 import argparse
+from functools import lru_cache
 import hashlib
 import json
 import math
@@ -13,7 +14,9 @@ import re
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-LAYOUTS = ("centered", "left", "stepped", "constellation", "cascade", "split", "wave", "columns", "random", "stepped-reverse", "stepped-zigzag", "split-mirrored", "split-three")
+REFERENCE_LAYOUT_KEYS = ("scattered-phrases", "alternating-phrases", "open-phrases", "inset-phrases")
+LAYOUTS = ("centered", "left", "stepped", "constellation", "cascade", "split", "wave", "columns", "random", "stepped-reverse", "stepped-zigzag", "split-mirrored", "split-three") + REFERENCE_LAYOUT_KEYS
+MIN_MOTION_SPEED = .68
 UNITS = ("letters", "words", "mixed")
 FORMATIONS = ("cluster", "stream", "patches")
 DEFAULT_FORMATIONS = ("cluster", "stream", "stream", "cluster", "patches", "patches", "cluster", "stream")
@@ -76,6 +79,90 @@ def wrapped_lines(text, size=1):
     return lines
 
 
+def reading_layouts():
+    """Load the shared Figma phrase boxes used by all three implementations."""
+    data = json.loads((ROOT / "data/reading-layouts.json").read_text())
+    layouts = data.get("layouts")
+    if not isinstance(layouts, list) or len(layouts) != len(REFERENCE_LAYOUT_KEYS):
+        raise ValueError("reading-layouts.json must contain four reference layouts")
+    for index, template in enumerate(layouts):
+        if template.get("id") != index + 13 or template.get("key") != REFERENCE_LAYOUT_KEYS[index]:
+            raise ValueError("reading layout IDs and keys must retain their shared order")
+        boxes = template.get("boxes")
+        if not isinstance(boxes, list) or not 1 <= len(boxes) <= 9:
+            raise ValueError("reading templates need one to nine boxes")
+        for box in boxes:
+            if any(type(box.get(field)) is not int for field in ("x", "y", "width", "rows", "weight")):
+                raise ValueError("reading box geometry and weights must be integers")
+            if not (0 <= box["x"] < 240 and 0 <= box["y"] < 320 and
+                    6 <= box["width"] <= 240 - box["x"] and
+                    1 <= box["rows"] <= 22 and 1 <= box["weight"] <= 255 and
+                    box["y"] + (box["rows"] - 1) * 14 + 8 <= 320):
+                raise ValueError("reading box geometry must fit the display")
+    return layouts
+
+
+def phrase_partition(text, template):
+    """Return contiguous word-group endpoints, or None when no full fit exists.
+
+    Candidates follow global weighted endpoints, nearest first with a lower-end
+    tie break. Only actual source newlines affect wrapping inside each box.
+    """
+    text = normalize_display(text)
+    staged_lines = wrapped_lines(text)
+    if staged_lines is None or len(staged_lines) > 97:
+        return None
+    words = list(re.finditer(r"[^ \n]+", text))
+    boxes = template["boxes"]
+    count = len(words)
+    if not words or count > 96 or len(text) > 512 or any(len(word[0]) > 28 for word in words):
+        return None
+    if count < len(boxes) or sum(len(word[0]) for word in words) > sum(box["width"] // 6 * box["rows"] for box in boxes):
+        return None
+    total_weight = sum(box["weight"] for box in boxes)
+    cumulative = 0
+    targets = []
+    for box in boxes:
+        cumulative += box["weight"]
+        targets.append((2 * count * cumulative + total_weight) // (2 * total_weight))
+
+    @lru_cache(None)
+    def fits(box_index, start, end):
+        columns, rows = boxes[box_index]["width"] // 6, boxes[box_index]["rows"]
+        row, used = 1, 0
+        for index in range(start, end):
+            length = len(words[index][0])
+            if length > columns:
+                return False
+            if index > start:
+                breaks = text[words[index - 1].end():words[index].start()].count("\n")
+                if breaks:
+                    row += breaks
+                    used = 0
+            if used and used + 1 + length > columns:
+                row += 1
+                used = 0
+            if row > rows:
+                return False
+            used += length + (1 if used else 0)
+        return True
+
+    @lru_cache(None)
+    def solve(box_index, start):
+        if box_index == len(boxes):
+            return () if start == count else None
+        last = count - (len(boxes) - box_index - 1)
+        candidates = sorted(range(start + 1, last + 1), key=lambda end: (abs(end - targets[box_index]), end))
+        for end in candidates:
+            if fits(box_index, start, end):
+                suffix = solve(box_index + 1, end)
+                if suffix is not None:
+                    return (end,) + suffix
+        return None
+    result = solve(0, 0)
+    return list(result) if result is not None else None
+
+
 def layout_size(text, layout="random"):
     """Check the same baseline and per-arrangement eligibility as the device.
 
@@ -89,6 +176,11 @@ def layout_size(text, layout="random"):
         raise ValueError("poem contains a word longer than the 28-character measure")
     if len(lines) > 97:
         raise ValueError("poem exceeds the 97 wrapped-line parser limit")
+    if layout in REFERENCE_LAYOUT_KEYS:
+        template = reading_layouts()[REFERENCE_LAYOUT_KEYS.index(layout)]
+        if phrase_partition(text, template) is None:
+            raise ValueError("poem cannot fill every reference phrase box without overflow")
+        return 1
     words = [word for line in lines for word in line.split()]
     if len(text) > 512 or not words or len(words) > 96:
         raise ValueError("poem needs 1 to 96 words and at most 512 characters")
@@ -198,6 +290,7 @@ def validate(data):
                     value = entry.get(field)
                     if type(value) not in (int, float) or not math.isfinite(value) or not low <= value <= high:
                         raise ValueError(f"{label}.{field} must be a finite number from {low} to {high}")
+                entry["speed"] = max(MIN_MOTION_SPEED, entry["speed"])
     data["version"] = 4
     return data
 
@@ -212,6 +305,21 @@ def cpp_float(value):
 
 
 def generate(data):
+    references = reading_layouts()
+    reading_header = [
+        "// Generated by scripts/generate_poetry.py from data/reading-layouts.json.",
+        "// " + json.loads((ROOT / "data/reading-layouts.json").read_text())["source"],
+        "#pragma once", "#include <stdint.h>", "",
+        "struct PoetryReadingBox { int16_t x, y; uint16_t width; uint8_t rows, weight; };",
+        "struct PoetryReadingTemplate { uint8_t id, count; PoetryReadingBox boxes[9]; };",
+        "constexpr uint8_t POETRY_REFERENCE_LAYOUT_COUNT = 4;",
+        "constexpr uint8_t POETRY_MAX_LAYOUT = 16;",
+        "static const PoetryReadingTemplate POETRY_READING_TEMPLATES[4] = {",
+    ]
+    for template in references:
+        boxes = ["{" + ", ".join(str(box[field]) for field in ("x", "y", "width", "rows", "weight")) + "}" for box in template["boxes"]]
+        reading_header.append("  {" + str(template["id"]) + ", " + str(len(boxes)) + ", {" + ", ".join(boxes) + "}},")
+    reading_header += ["};", ""]
     header = [
         "// Generated by scripts/generate_poetry.py. Edit data/poetry.json instead.",
         "#pragma once", "#include <stdint.h>", "",
@@ -243,11 +351,14 @@ def generate(data):
         raise ValueError("data/font5x7.json must contain 95 glyphs of five bytes")
     browser = "// Generated by scripts/generate_poetry.py. Edit data/poetry.json instead.\n"
     browser += "globalThis.POETRY_DATA = " + json.dumps(data, ensure_ascii=False, indent=2) + ";\n\n"
+    browser += "globalThis.POETRY_READING_LAYOUTS = " + json.dumps(references, ensure_ascii=False, separators=(",", ":")) + ";\n\n"
+    # Keep poem-edit provenance independent from motion/template releases.
+    # Older source copies of presets are migrated separately by library-store.
     revision = hashlib.sha256(json.dumps(data["poems"], sort_keys=True, ensure_ascii=False).encode()).hexdigest()
     browser += "globalThis.POETRY_SOURCE_REVISION = " + json.dumps(revision) + ";\n\n"
     browser += "/* ASCII font from Adafruit GFX; see data/font5x7.json for provenance.\n" + font["license"] + "\n*/\n"
     browser += "globalThis.POETRY_FONT = " + json.dumps(glyphs, separators=(",", ":")) + ";\n"
-    outputs = {ROOT / "src/poetry_data.h": "\n".join(header), ROOT / "sandbox/poetry-data.js": browser}
+    outputs = {ROOT / "src/poetry_data.h": "\n".join(header), ROOT / "src/reading_layouts.h": "\n".join(reading_header), ROOT / "sandbox/poetry-data.js": browser}
     # Give changed app scripts new URLs when an embedded preview reuses its
     # cache. Preserve every other byte of the current hand-edited pages, and
     # hash generated data from this run rather than its previous on-disk copy.

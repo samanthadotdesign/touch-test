@@ -1,7 +1,7 @@
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
-const {Experience,layout,pose,fieldPose,particleProgress,particleRandom,FORMATIONS,LAYOUTS,buildUnits,project,validateLibrary,displayText,shade,ASSEMBLE_SECONDS,CHANGE_SECONDS}=require('../sandbox/engine.js');
+const {Experience,layout,pose,fieldPose,particleProgress,particleRandom,FORMATIONS,LAYOUTS,LAYOUT_LABELS,LIMITS,MOTION_TEMPO,buildUnits,project,validateLibrary,displayText,shade,ASSEMBLE_SECONDS,CHANGE_SECONDS}=require('../sandbox/engine.js');
 const actualLibrary=JSON.parse(fs.readFileSync(require('node:path').join(__dirname,'../data/poetry.json'),'utf8'));
 const source={...actualLibrary,poems:require('./fixtures/poems.json')};
 const clone=()=>JSON.parse(JSON.stringify(source));
@@ -158,7 +158,7 @@ test('maximum supported body expands to bounded independent glyphs',()=>{
 });
 
 test('all twelve static layouts preserve every word and stay within the screen',()=>{
- for(const poem of source.poems)for(const name of LAYOUTS){const a=layout(poem.text,name);assert.equal(a.words.map(w=>w.text).join(' '),poem.text.trim().split(/\s+/).join(' '));for(const w of a.words){assert.ok(w.x-w.width/2>=-112.01,`${name} left`);assert.ok(w.x+w.width/2<=112.01,`${name} right`);assert.ok(w.y-4>=-152,`${name} top`);assert.ok(w.y+4<128,`${name} bottom`);}
+ for(const poem of source.poems)for(const name of LAYOUTS.slice(0,12)){const a=layout(poem.text,name);assert.equal(a.words.map(w=>w.text).join(' '),poem.text.trim().split(/\s+/).join(' '));for(const w of a.words){assert.ok(w.x-w.width/2>=-112.01,`${name} left`);assert.ok(w.x+w.width/2<=112.01,`${name} right`);assert.ok(w.y-4>=-152,`${name} top`);assert.ok(w.y+4<128,`${name} bottom`);}
   for(let i=0;i<a.words.length;i++)for(let j=i+1;j<a.words.length;j++){const x=a.words[i],y=a.words[j];const overlapX=Math.min(x.x+x.width/2,y.x+y.width/2)-Math.max(x.x-x.width/2,y.x-y.width/2),overlapY=Math.min(x.y+4,y.y+4)-Math.max(x.y-4,y.y-4);assert.ok(overlapX<=.001||overlapY<=.001,`${name} overlaps ${x.text}/${y.text}`);}}
 });
 test('random compositions are fixed within a scene and change on the next scene',()=>{
@@ -220,7 +220,7 @@ test('long verse tightens spacing while preserving blank lines and author cleara
 test('all twelve layouts keep fixed optional work-title and author footer anchors',()=>{
  const text='First light moves\nAcross the quiet room\nA little slowly\nBefore the day begins';
  const longTitle='A'.repeat(20)+' '+'B'.repeat(20)+' '+'C'.repeat(18);
- for(const mode of LAYOUTS)for(const title of ['', 'Actual Work Title',longTitle]){
+ for(const mode of LAYOUTS.slice(0,12))for(const title of ['', 'Actual Work Title',longTitle]){
   const a=layout(text,mode,title),untitled=layout(text,mode);
   assert.equal(a.authorY,295,mode);assert.equal(a.footerTop,a.titleLines.length?a.titleY:295);
   assert.equal(a.titleLines.length,title===longTitle?3:title?1:0);
@@ -285,5 +285,93 @@ test('the bitmap renderer centres the actual work title at281 and author at295 w
   if(!title)assert.ok(draws.filter(draw=>draw.style===`rgba(${ink},0.4)`).every(draw=>draw.y>=295),'empty actual work title has no placeholder');
   e.touch();advance(e,.2);draws.length=0;render(e);
   const opacity=.4*(1-e.layers()[0].progress);assert.deepEqual(pixelsFor(`rgba(${ink},${opacity})`),expectedPixels(lines));
+ }
+});
+
+test('generated phrase layout keys and labels append to the twelve existing compositions',()=>{
+ const manifest=require('../data/reading-layouts.json').layouts;
+ assert.equal(LAYOUTS.length,16);assert.deepEqual(LAYOUTS.slice(12),manifest.map(template=>template.key));
+ assert.deepEqual(LAYOUT_LABELS.slice(12),manifest.map(template=>template.label));
+ const vm=require('node:vm'),environment={POETRY_READING_LAYOUTS:manifest,module:{exports:{}},require(){throw Error('Browser templates must come from generated data');}};
+ vm.runInNewContext(fs.readFileSync(require('node:path').join(__dirname,'../sandbox/engine.js'),'utf8'),environment);
+ assert.deepEqual(Array.from(environment.module.exports.LAYOUTS),LAYOUTS);
+});
+test('four Figma reference texts reproduce their weighted phrase cuts and exact box coordinates',()=>{
+ const templates=require('../data/reading-layouts.json').layouts;
+ const ids=['i-went-to-the-woods','and-once-the-storm-is-over','make-sure-the-things-we-do','make-sure-the-things-we-do'];
+ for(const [index,template] of templates.entries()){
+  const poem=actualLibrary.poems.find(poem=>poem.id===ids[index]),a=layout(poem.text,template.key,poem.workTitle),tokens=[...displayText(poem.text).matchAll(/[^ \n]+/g)];
+  assert.equal(tokens.length,template.boxes.reduce((sum,box)=>sum+box.weight,0));assert.equal(a.words.length,tokens.length);
+  let start=0;
+  for(const box of template.boxes){let row=0,col=0;const end=start+box.weight,columns=Math.floor(box.width/6);
+   for(let i=start;i<end;i++){
+    const word=a.words[i];if(i>start)col++;
+    if(col+word.text.length>columns){row++;col=0;}
+    assert.ok(row<box.rows);assert.equal(word.text,tokens[i][0]);assert.equal(word.sourceOffset,tokens[i].index);
+    close(word.x+120,box.x+col*6+word.width/2);close(word.y+160,box.y+row*14+4);col+=word.text.length;
+   }
+   start=end;
+  }
+  assert.equal(a.authorY,295);assert.equal(a.letters.map(letter=>letter.text).join(''),displayText(poem.text).replace(/\s/g,''));
+ }
+});
+test('phrase suffix solving backtracks without splitting words and preserves raw newline gaps',()=>{
+ const templates=require('../data/reading-layouts.json').layouts;
+ const fixtures=[
+  ['open-phrases',[...Array(10).fill('a'),...Array(6).fill('longword')].join(' '),[2,10,14,16]],
+  ['inset-phrases','one two three four five six seven eight nine ten eleven twelve',[5,8,12]],
+  ['inset-phrases','a b c d e f',[2,4,6]],
+  ['inset-phrases','a\n\nb c d e f',[1,4,6]],
+  ['inset-phrases',Array(15).fill('abcd').join(' '),[4,10,15]]
+ ];
+ for(const [key,text,ends] of fixtures){const a=layout(text,key),template=templates.find(template=>template.key===key);let start=0;
+  template.boxes.forEach((box,index)=>{close(a.words[start].x+120,box.x+a.words[start].width/2);close(a.words[start].y+160,box.y+4);start=ends[index];});
+  assert.equal(start,a.words.length);for(const word of a.words)assert.equal(a.text.slice(word.sourceOffset,word.sourceOffset+word.text.length),word.text);
+ }
+ const text='a a\n'+Array(14).fill('a').join(' '),a=layout(text,'inset-phrases');
+ close(a.words[2].y-a.words[1].y,14); // an original newline starts a new phrase row
+ for(let i=12;i<16;i++)close(a.words[i].y,a.words[11].y); // old automatic168px wrap must not add a row
+ for(const template of templates){assert.throws(()=>layout('one two',template.key));assert.throws(()=>layout(Array(19).fill('a'.repeat(26)).join('\n'),template.key));}
+ assert.throws(()=>layout(Array(23).fill('word').join('\n'),'centered'));
+});
+test('phrase templates retain the global97wrapped-line parser limit',()=>{
+ const templates=require('../data/reading-layouts.json').layouts;
+ for(const template of templates){
+  assert.throws(()=>layout('\n'.repeat(97)+'a b c d e f',template.key),/too many line breaks/);
+  assert.throws(()=>layout('\n'.repeat(96)+Array(6).fill('longword').join(' '),template.key),/too many line breaks/);
+ }
+});
+test('eligible phrase templates preserve the full corpus, avoid collisions, and clear fixed footers',()=>{
+ const templates=require('../data/reading-layouts.json').layouts,eligible=new Map(templates.map(template=>[template.key,0]));
+ const longTitle='A'.repeat(20)+' '+'B'.repeat(20)+' '+'C'.repeat(18);
+ for(const poem of actualLibrary.poems)for(const template of templates)for(const title of [poem.workTitle,longTitle]){
+  let a;try{a=layout(poem.text,template.key,title);}catch(_){continue;}eligible.set(template.key,eligible.get(template.key)+1);
+  const tokens=[...displayText(poem.text).matchAll(/[^ \n]+/g)];assert.equal(a.words.length,tokens.length);
+  a.words.forEach((word,index)=>{assert.equal(word.text,tokens[index][0]);assert.equal(word.sourceOffset,tokens[index].index);assert.ok(word.x-word.width/2>=-120&&word.x+word.width/2<=120);assert.ok(word.y+160-4>=4-1e-8);assert.ok(word.y+160+4<=a.footerTop-16+1e-8);});
+  for(let i=0;i<a.words.length;i++)for(let j=i+1;j<a.words.length;j++){const x=a.words[i],y=a.words[j],overlapX=Math.min(x.x+x.width/2,y.x+y.width/2)-Math.max(x.x-x.width/2,y.x-y.width/2),overlapY=Math.min(x.y+4,y.y+4)-Math.max(x.y-4,y.y-4);assert.ok(overlapX<=.001||overlapY<=.001,`${template.key}: ${x.text}/${y.text}`);}
+ }
+ for(const count of eligible.values())assert.ok(count>0);
+});
+test('Random gives each eligible phrase template three buckets and excludes the prior composition',()=>{
+ const data=clone(),text=Array(4).fill('a a a a').join('\n');data.poems=[{id:'weighted',title:'',workTitle:'',by:'Reader',text,layout:'random'}];
+ const e=new Experience(data,()=>0),poem=e.poem,counts=new Map();e.arrangement=null;
+ for(let bucket=0;bucket<24;bucket++){e.random=()=>(bucket+.5)/24;const picked=e.chooseLayout(poem).layoutName;counts.set(picked,(counts.get(picked)||0)+1);}
+ for(const [index,name] of LAYOUTS.entries())assert.equal(counts.get(name),index<12?1:3,name);
+ e.arrangement={layoutName:'open-phrases'};counts.clear();
+ for(let bucket=0;bucket<21;bucket++){e.random=()=>(bucket+.5)/21;const picked=e.chooseLayout(poem).layoutName;counts.set(picked,(counts.get(picked)||0)+1);}
+ assert.equal(counts.has('open-phrases'),false);
+ for(const [index,name] of LAYOUTS.entries())if(name!=='open-phrases')assert.equal(counts.get(name),index<12?1:3,name);
+ const sparse={...poem,text:'one\ntwo'};e.arrangement=null;
+ for(let bucket=0;bucket<24;bucket++){e.random=()=>(bucket+.5)/24;assert.ok(LAYOUTS.indexOf(e.chooseLayout(sparse).layoutName)<12);}
+});
+test('motion starts at1.36nominal while valid legacy styles migrate and direct physics floors low speeds',()=>{
+ close(LIMITS.speed[0]*MOTION_TEMPO,1.36);
+ const data=clone(),custom={...data.animations[0],id:'custom-slow',name:'My quiet style',speed:.17,formation:'patches'};data.animations.push(custom);
+ validateLibrary(data);assert.equal(custom.speed,.68);assert.equal(custom.name,'My quiet style');assert.equal(custom.formation,'patches');assert.equal(data.animations.at(-1).id,'custom-slow');
+ for(const invalid of [.09,2.01]){const d=clone();d.animations[0].speed=invalid;assert.throws(()=>validateLibrary(d));}
+ for(const kind of Array.from({length:8},(_,i)=>i))for(const formation of FORMATIONS){
+  const low={...source.animations[kind],kind,formation,speed:.1},floor={...low,speed:.68},fast={...low,speed:1.2};
+  assert.deepEqual(pose(7,180,3,low),pose(7,180,3,floor));assert.deepEqual(fieldPose(7,180,3,low,6,123),fieldPose(7,180,3,floor,6,123));
+  assert.notDeepEqual(fieldPose(7,180,3,floor,6,123),fieldPose(7,180,3,fast,6,123));
  }
 });

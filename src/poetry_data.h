@@ -26,13 +26,13 @@ static const int POEM_COUNT = sizeof(POEMS) / sizeof(POEMS[0]);
 
 struct MotionPreset { const char *id; const char *name; uint8_t kind; float speed, spread, depth, tilt, spin, perspective; uint8_t unit; uint8_t formation; };
 static const MotionPreset MOTIONS[] = {
-  {"orbit", "Orbit", 0, 0.55f, 96.0f, 100.0f, 0.45f, 0.15f, 420.0f, 2, 0},
-  {"helix", "Helix", 1, 0.5f, 92.0f, 130.0f, 0.6f, 0.2f, 420.0f, 2, 1},
-  {"wave", "Wave", 2, 0.65f, 100.0f, 80.0f, 0.35f, 0.1f, 420.0f, 2, 1},
-  {"vortex", "Vortex", 3, 0.6f, 96.0f, 120.0f, 0.5f, 0.25f, 420.0f, 2, 0},
-  {"drift", "Drift", 4, 0.45f, 98.0f, 90.0f, 0.3f, 0.12f, 420.0f, 2, 2},
-  {"tumble", "Tumble", 5, 0.5f, 92.0f, 110.0f, 0.7f, 0.4f, 420.0f, 2, 2},
-  {"cloud", "Cloud", 6, 0.45f, 96.0f, 130.0f, 0.25f, 0.08f, 420.0f, 2, 0},
-  {"ribbon", "Ribbon", 7, 0.55f, 100.0f, 110.0f, 0.25f, 0.08f, 420.0f, 2, 1},
+  {"orbit", "Orbit", 0, 0.84f, 96.0f, 100.0f, 0.45f, 0.15f, 420.0f, 2, 0},
+  {"helix", "Helix", 1, 0.76f, 92.0f, 130.0f, 0.6f, 0.2f, 420.0f, 2, 1},
+  {"wave", "Wave", 2, 1.0f, 100.0f, 80.0f, 0.35f, 0.1f, 420.0f, 2, 1},
+  {"vortex", "Vortex", 3, 0.92f, 96.0f, 120.0f, 0.5f, 0.25f, 420.0f, 2, 0},
+  {"drift", "Drift", 4, 0.68f, 98.0f, 90.0f, 0.3f, 0.12f, 420.0f, 2, 2},
+  {"tumble", "Tumble", 5, 0.76f, 92.0f, 110.0f, 0.7f, 0.4f, 420.0f, 2, 2},
+  {"cloud", "Cloud", 6, 0.68f, 96.0f, 130.0f, 0.25f, 0.08f, 420.0f, 2, 0},
+  {"ribbon", "Ribbon", 7, 0.84f, 100.0f, 110.0f, 0.25f, 0.08f, 420.0f, 2, 1},
 };
 static const int MOTION_COUNT = sizeof(MOTIONS) / sizeof(MOTIONS[0]);

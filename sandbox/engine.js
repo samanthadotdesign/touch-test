@@ -5,7 +5,8 @@
   const FORMATION_LABELS=['Condensed cloud','Typographic stream','Fragment islands'];
   const KIND_FORMATIONS=['cluster','stream','stream','cluster','patches','patches','cluster','stream'];
   const KINDS = ['Orbit', 'Helix', 'Wave', 'Vortex', 'Drift', 'Tumble', 'Cloud', 'Ribbon'];
-  const LIMITS = {speed:[.1,2],spread:[20,100],depth:[0,180],tilt:[0,1.2],spin:[0,1],perspective:[240,800]};
+  const MIN_MOTION_SPEED=.68;
+  const LIMITS = {speed:[MIN_MOTION_SPEED,2],spread:[20,100],depth:[0,180],tilt:[0,1.2],spin:[0,1],perspective:[240,800]};
   const MOTION_TEMPO=2;
   const ASSEMBLE_SECONDS=.55, CHANGE_SECONDS=.65;
   const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -14,8 +15,44 @@
   const angle=v=>Math.atan2(Math.sin(v),Math.cos(v));
   const mix=(a,b,t)=>a+(b-a)*t;
   const shade=(z,depth)=>.12+.84*Math.pow(clamp(.5+z/(2*Math.max(depth,1)),0,1),1.35);
-  const LAYOUTS = ['centered','left','stepped','constellation','cascade','split','wave','columns','stepped-reverse','stepped-zigzag','split-mirrored','split-three'];
-  const LAYOUT_LABELS = ['Centered verse','Left aligned','Diagonal steps','Constellation','Word cascade','Stanza islands','Wavy lines','Twin columns','Reverse steps','Zigzag steps','Mirrored islands','Three islands'];
+  const READING_LAYOUTS=root.POETRY_READING_LAYOUTS??(typeof module!=='undefined'&&module.exports&&typeof require==='function'?require('../data/reading-layouts.json').layouts:[]);
+  const LAYOUTS = ['centered','left','stepped','constellation','cascade','split','wave','columns','stepped-reverse','stepped-zigzag','split-mirrored','split-three',...READING_LAYOUTS.map(template=>template.key)];
+  const LAYOUT_LABELS = ['Centered verse','Left aligned','Diagonal steps','Constellation','Word cascade','Stanza islands','Wavy lines','Twin columns','Reverse steps','Zigzag steps','Mirrored islands','Three islands',...READING_LAYOUTS.map(template=>template.label)];
+  function arrangePhrases(text,words,template){
+    const boxes=template.boxes,count=words.length;
+    if(count<boxes.length||words.reduce((sum,word)=>sum+word.text.length,0)>boxes.reduce((sum,box)=>sum+box.rows*Math.floor(box.width/6),0))return false;
+    // A segment starts at row zero; only its internal, original newline gaps
+    // force new rows. The old verse parser's automatic wrapping is irrelevant.
+    function segment(box,start,end,place=false){
+      const columns=Math.floor(box.width/6);let row=0,col=0;
+      for(let i=start;i<end;i++){
+        const word=words[i];
+        if(i>start){const previous=words[i-1],gap=text.slice(previous.sourceOffset+previous.text.length,word.sourceOffset),newlines=gap.split('\n').length-1;if(newlines){row+=newlines;col=0;}else col++;}
+        if(word.text.length>columns)return i;
+        if(col+word.text.length>columns){row++;col=0;}
+        if(row>=box.rows)return i;
+        if(place){word.x=box.x+col*6+word.width/2;word.y=box.y+row*14+4;}
+        col+=word.text.length;
+      }
+      return end;
+    }
+    const weights=boxes.map(box=>box.weight),total=weights.reduce((a,b)=>a+b,0),cumulative=[];
+    weights.reduce((sum,weight,index)=>(cumulative[index]=sum+weight),0);
+    const memo=new Map(),fitEnds=new Map();
+    function solve(boxIndex,start){
+      if(boxIndex===boxes.length)return start===count?[]:null;
+      const key=boxIndex+':'+start;if(memo.has(key))return memo.get(key);
+      if(!fitEnds.has(key))fitEnds.set(key,segment(boxes[boxIndex],start,count));
+      const minimum=start+1,maximum=Math.min(count-(boxes.length-boxIndex-1),fitEnds.get(key));
+      const target=Math.floor((2*count*cumulative[boxIndex]+total)/(2*total));
+      const ends=Array.from({length:Math.max(0,maximum-minimum+1)},(_,i)=>minimum+i).sort((a,b)=>Math.abs(a-target)-Math.abs(b-target)||a-b);
+      for(const end of ends){const remaining=solve(boxIndex+1,end);if(remaining!==null){const result=[end,...remaining];memo.set(key,result);return result;}}
+      memo.set(key,null);return null;
+    }
+    const ends=solve(0,0);if(ends===null)return false;
+    let start=0;ends.forEach((end,index)=>{segment(boxes[index],start,end,true);start=end;});
+    return true;
+  }
   function displayText(value){
     const aliases={"\u2018":"'","\u2019":"'","\u201a":"'","\u201b":"'","\u201c":'"',"\u201d":'"',"\u201e":'"',"\u201f":'"',"\u2010":"-","\u2011":"-","\u2012":"-","\u2013":"-","\u2014":"-","\u2212":"-","\u00a0":" ","\u202f":" ","\u2026":"..."};
     return value.replace(/[\u2018-\u201f\u2010-\u2014\u2212\u00a0\u202f\u2026]/g,c=>aliases[c]);
@@ -40,6 +77,7 @@
     if(titleLine)titleLines.push(titleLine);
     const authorY=295,titleY=281-Math.max(0,titleLines.length-1)*14;
     const footerTop=titleLines.length?titleY:authorY,bodyTop=4,bodyBottom=footerTop-16;
+    const phraseTemplate=READING_LAYOUTS.find(template=>template.key===readingLayout);
     const size=1,advance=6,lines=[[]];let width=0,sourceOffset=0;
     for(const [index,paragraph] of text.split('\n').entries()) {
       if(index){lines.push([]);width=0;}
@@ -56,7 +94,9 @@
     const words=[];lines.forEach((line,i)=>line.forEach(word=>words.push({...word,size,line:i})));
     const n=words.length,l=lines.length;if(l>97)throw Error('This poem has too many line breaks.');if(!n)throw Error('A poem needs some words.');
     const fail=()=>{throw Error('This poem does not fit this composition. Choose Random for a layout that fits.');};
-    if(['centered','left','stepped','stepped-reverse','stepped-zigzag'].includes(readingLayout)){
+    if(phraseTemplate){
+      if(!arrangePhrases(text,words,phraseTemplate))fail();
+    }else if(['centered','left','stepped','stepped-reverse','stepped-zigzag'].includes(readingLayout)){
       const indent=i=>readingLayout==='stepped'?i*8:readingLayout==='stepped-reverse'?(l-1-i)*8:readingLayout==='stepped-zigzag'?(i%4<=2?i%4:4-i%4)*12:0;
       const groupWidth=Math.max(...widths.map((w,i)=>w+indent(i)));
       const pitch=l>1?Math.max(12,Math.min(14,Math.floor(252/(l-1)))):14;
@@ -150,14 +190,15 @@
     }
     for(const a of data.animations){if(typeof a.name!=='string'||!a.name.trim()||a.name.length>60||!/^[\x20-\x7e]+$/.test(a.name))throw Error('Animation names need 1–60 simple Latin letters or punctuation.');
       if(!Number.isInteger(a.kind)||a.kind<0||a.kind>7)throw Error('Animation kind must be 0–7.');
-      for(const [key,[min,max]] of Object.entries(LIMITS))if(typeof a[key]!=='number'||!Number.isFinite(a[key])||a[key]<min||a[key]>max)throw Error(`${a.name}: ${key} must be between ${min} and ${max}.`);
+      for(const [key,[min,max]] of Object.entries(LIMITS)){const acceptedMin=key==='speed'?.1:min;if(typeof a[key]!=='number'||!Number.isFinite(a[key])||a[key]<acceptedMin||a[key]>max)throw Error(`${a.name}: ${key} must be between ${acceptedMin} and ${max}.`);}
+      a.speed=Math.max(MIN_MOTION_SPEED,a.speed);
       if(a.formation===undefined)a.formation=KIND_FORMATIONS[a.kind];if(!FORMATIONS.includes(a.formation))throw Error('Choose a condensed cloud, typographic stream, or fragment islands distribution.');
       if(a.unit===undefined)a.unit='mixed';if(!['letters','words','mixed'].includes(a.unit))throw Error('Choose mixed words and letters, letters, or whole words for motion.');
     }
     data.version=4;return data;
   }
   function pose(index,count,seconds,m) {
-    const u=(index+.5)/count,p=index*2.39996323,t=seconds*m.speed,s=m.spread,d=m.depth,l=m.tilt,k=m.spin;
+    const u=(index+.5)/count,p=index*2.39996323,t=seconds*Math.max(MIN_MOTION_SPEED,m.speed),s=m.spread,d=m.depth,l=m.tilt,k=m.spin;
     let x,y,z,rx,ry,rz,a,r,h,row,col,rows;
     switch(m.kind){
       case 0:a=p+t*.45;x=Math.cos(a)*s*(.35+.55*u);y=Math.sin(a*.8+p*.3)*s*.85;z=Math.sin(a)*d;rx=Math.sin(a*.7)*l;ry=Math.cos(a*.6)*l;rz=Math.sin(a*.4)*k;break;
@@ -175,7 +216,7 @@
     seconds*=MOTION_TEMPO;
     const r=channel=>particleRandom(seed,index,channel),tau=Math.PI*2;
     const rate=.35+1.4*r(3),direction=r(4)<.5?-1:1,phaseX=r(0)*tau,phaseY=r(1)*tau,phaseZ=r(2)*tau;
-    const v=pose(index,count,seconds*rate*direction+phaseX*18,m),t=seconds*m.speed;
+    const v=pose(index,count,seconds*rate*direction+phaseX*18,m),t=seconds*Math.max(MIN_MOTION_SPEED,m.speed);
     v.z=.65*v.z+.35*m.depth*Math.sin(t*(.15+.45*r(11))+phaseZ);
     v.rx=.45*Math.sin(v.rx)+.15*m.tilt*Math.sin(t*rate*.15+phaseZ);
     v.ry=.45*Math.sin(v.ry)+.15*m.tilt*Math.cos(t*rate*.13+phaseX);
@@ -217,7 +258,7 @@
   class Experience {
     constructor(library,random=Math.random){this.library=validateLibrary(library);this.random=random;this.blowForce=0;this.poemIndex=-1;this.animationIndex=-1;this.pick();}
     different(count,last){if(count<2)return 0;if(last<0)return Math.floor(this.random()*count);const n=Math.floor(this.random()*(count-1));return n>=last?n+1:n;}
-    chooseLayout(poem){if(poem.layout!=='random')return layout(poem.text,poem.layout,poem.workTitle||'');const eligible=LAYOUTS.flatMap(name=>{try{return[layout(poem.text,name,poem.workTitle||'')];}catch(error){return[];}});const choices=eligible.length>1?eligible.filter(a=>a.layoutName!==this.arrangement?.layoutName):eligible;return choices[Math.floor(this.random()*choices.length)];}
+    chooseLayout(poem){if(poem.layout!=='random')return layout(poem.text,poem.layout,poem.workTitle||'');const eligible=LAYOUTS.flatMap(name=>{try{return[layout(poem.text,name,poem.workTitle||'')];}catch(error){return[];}});const choices=eligible.length>1?eligible.filter(a=>a.layoutName!==this.arrangement?.layoutName):eligible;const weighted=choices.flatMap(choice=>Array(READING_LAYOUTS.some(template=>template.key===choice.layoutName)?3:1).fill(choice));return weighted[Math.floor(this.random()*weighted.length)];}
     makeScene(poemIndex,animationIndex){const poem=this.library.poems[poemIndex],motion={...this.library.animations[animationIndex]};return{poemIndex,animationIndex,poem,motion,arrangement:this.chooseLayout(poem),time:0,seed:Math.floor(this.random()*4294967296)>>>0};}
     adopt(scene){this.poemIndex=scene.poemIndex;this.animationIndex=scene.animationIndex;this.poem=scene.poem;this.motion=scene.motion;this.arrangement=scene.arrangement;this.time=scene.time;this.seed=scene.seed;this.mode='MOVING';this.age=0;this.next=null;this.cycle=(this.cycle||0)+1;}
     pick(){this.adopt(this.makeScene(this.different(this.library.poems.length,this.poemIndex),this.different(this.library.animations.length,this.animationIndex)));}

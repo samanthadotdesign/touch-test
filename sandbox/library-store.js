@@ -3,6 +3,8 @@
   'use strict';
   const STORAGE_KEY='airplane-poetry-library-v1';
   const BACKUP_KEY='airplane-poetry-library-backup-v1';
+  const MIN_SPEED=.68;
+  const LEGACY_PRESET_SPEEDS={orbit:.55,helix:.5,wave:.65,vortex:.6,drift:.45,tumble:.5,cloud:.45,ribbon:.55};
   const clone=value=>JSON.parse(JSON.stringify(value));
   const DEMOS={
     'small-light':'A small light\nleans into dusk.\nThe room remembers\nhow to be still.',
@@ -36,6 +38,26 @@
     result.animations=[...animations.values()];
     return result;
   }
+  function updateSavedMotion(base,saved){
+    const library=clone(saved),canonical=new Map(base.animations.map(animation=>[animation.id,animation]));
+    let changed=false;
+    library.animations=library.animations.map(animation=>{
+      const current=canonical.get(animation.id);
+      if(current&&Object.prototype.hasOwnProperty.call(LEGACY_PRESET_SPEEDS,animation.id)){
+        const legacy={...current,speed:LEGACY_PRESET_SPEEDS[animation.id]},keys=Object.keys(legacy);
+        // Only untouched old built-ins inherit new defaults. Saved variations
+        // and edited built-ins retain all their parameters, subject to the floor.
+        if(keys.length===Object.keys(animation).length&&keys.every(key=>animation[key]===legacy[key])){
+          if(keys.some(key=>animation[key]!==current[key])){changed=true;return clone(current);}
+        }
+      }
+      if(typeof animation.speed==='number'&&Number.isFinite(animation.speed)&&animation.speed>=.1&&animation.speed<MIN_SPEED){
+        animation.speed=MIN_SPEED;changed=true;
+      }
+      return animation;
+    });
+    return{library,changed};
+  }
   function loadLibrary(base,revision,storage){
     const fallback=clone(base);let raw;
     try{raw=storage.getItem(STORAGE_KEY);}catch(error){return{library:fallback,notice:'Loaded your database. Browser storage could not be read.',migrated:false};}
@@ -45,8 +67,11 @@
       const parsed=JSON.parse(raw),wrapped=parsed&&Object.prototype.hasOwnProperty.call(parsed,'sourceRevision');
       const saved=wrapped?parsed.library:parsed;
       if(!hasLibraryShape(saved))throw Error('Invalid library structure');
-      if(wrapped&&parsed.sourceRevision===revision)return{library:clone(saved),notice:'',migrated:false};
-      library=reconcile(base,saved);
+      const motion=updateSavedMotion(base,saved);
+      if(wrapped&&parsed.sourceRevision===revision){
+        if(!motion.changed)return{library:motion.library,notice:'',migrated:false};
+        library=motion.library;
+      }else library=reconcile(base,motion.library);
     }catch(error){notice='Loaded your database; the unreadable browser library is backed up.';}
     try{storage.setItem(BACKUP_KEY,raw);}catch(error){return{library,notice:'Loaded your database in memory. Browser backup failed; the previous saved library was left intact.',migrated:false};}
     // The caller validates before saving the reconciled value to the primary key.
