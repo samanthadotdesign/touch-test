@@ -1,7 +1,7 @@
 Native firmware tests (no ESP32 required)
 ========================================
 
-Run all three suites from the repository root after PlatformIO has downloaded
+Run all four suites from the repository root after PlatformIO has downloaded
 the GFX Library for Arduino dependency. Its font data is used by the poetry
 suite; ./pio run fetches it before compiling the firmware.
 
@@ -20,6 +20,10 @@ and runs these production-code suites:
   checks staged startup, discarded warmup spikes, normalized RMS, either active
   slot, bounded zero-timeout DMA reads, stale input, stop/cancel/re-enable,
   and cleanup after codec or driver errors.
+- display_native.cpp: the real display setup with simulated panel, canvas,
+  and heap allocation. Both PSRAM canvas and direct-display fallback must
+  configure the IPS panel and send the explicit normal-polarity setting to
+  the hardware rather than the canvas.
 
 Arduino, display output, touch, settings, clocks, and audio hardware are stubbed
 as needed. These tests do not measure hardware frame rate or prove the physical

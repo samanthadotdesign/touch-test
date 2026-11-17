@@ -37,7 +37,9 @@ void displayBegin() {
   digitalWrite(LCD_BL, HIGH);
 
   bus = new Arduino_ESP32SPI(LCD_DC, LCD_CS, LCD_SCK, LCD_MOSI, LCD_MISO);
-  tft = new Arduino_ILI9341(bus, GFX_NOT_DEFINED, 0);
+  // ES3C28P's IPS panel uses INVON (0x21) for normal colours, as in
+  // https://www.lcdwiki.com/res/ES3C28P/ILI9341V_Init.txt
+  tft = new Arduino_ILI9341(bus, GFX_NOT_DEFINED, 0, true);
   canvas = new PsamCanvas(LCD_W, LCD_H, tft);
 
   if (canvas->begin() && canvas->getFramebuffer()) {
@@ -50,7 +52,8 @@ void displayBegin() {
     useCanvas = false;
     Serial.println("display: direct ILI9341 (no canvas)");
   }
-  gfx->invertDisplay(INVERT_COLOURS);
+  // Canvas inversion is a no-op; this setting belongs to the physical panel.
+  tft->invertDisplay(INVERT_COLOURS);
 }
 
 void displayFlush() {

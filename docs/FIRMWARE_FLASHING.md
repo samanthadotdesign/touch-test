@@ -15,7 +15,7 @@ Connect the board with a USB data cable. To choose a port, run `./pio device lis
 
 ## Use the GitHub build
 
-The **[ESP32 firmware workflow](https://github.com/samanthadotdesign/touch-test/actions/workflows/firmware.yml)** runs on pushes to `main` and `codex/**` branches and can also be started with **Run workflow**. It checks the browser code and generated library, builds with PlatformIO on Ubuntu, and runs three native firmware suites before uploading an artifact.
+The **[ESP32 firmware workflow](https://github.com/samanthadotdesign/touch-test/actions/workflows/firmware.yml)** runs on pushes to `main` and `codex/**` branches and can also be started with **Run workflow**. It checks the browser code and generated library, builds with PlatformIO on Ubuntu, and runs four native firmware suites before uploading an artifact.
 
 Open a successful run for the `main` commit you want and download **esp32s3-firmware** from its artifacts. Extract the download. It contains `firmware-merged.bin`, the individual bootloader/partition/application binaries, and `FLASHING.md`. Use the individual binaries for a normal update that keeps saved settings. The merged image is a convenient first-install image at address `0x0`, but its padded gaps overwrite saved theme and threshold settings.
 
@@ -56,5 +56,7 @@ Flashing this merged image overwrites saved theme and threshold settings even wi
 ## After updating
 
 Tap the display’s invisible bottom-right 44 × 44 corner. Try Night clouds, Paper clouds, and Colour fields; the sheet hides after six seconds. Enable the mic, then adjust the threshold with **− / +** if needed. A gentle blow spreads moving colour and text. A sustained strong blow reveals the poem; a new breath or tap starts the next animated poem. The microphone needs staged setup and a short warmup before responding.
+
+Check that Night is dark with white text and Paper is light with black text. The ES3C28P IPS panel needs the manufacturer's normal-colour inversion setting (`INVON`, `0x21`), applied directly to the screen even when drawing through the canvas. Earlier builds used the generic panel default, which can reverse dark/light themes and turn warm colours blue or cyan. The firmware now selects the IPS panel mode; palette values and RGB565 byte order stay the same. See the [manufacturer's initialization code](https://www.lcdwiki.com/res/ES3C28P/ILI9341V_Init.txt).
 
 Build tests do not verify the physical microphone, display speed, touch coordinates, or flashing connection. No board has been flashed or physically verified as part of this update.

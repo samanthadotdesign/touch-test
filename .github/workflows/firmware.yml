@@ -35,7 +35,7 @@ jobs:
           git diff --exit-code -- sandbox/background.bundle.js
       - name: Build and package ESP32 firmware
         run: ./pio run
-      - name: Check native firmware controls and microphone driver
+      - name: Check native firmware controls, microphone, and display
         run: bash scripts/test_native.sh
       - name: Upload ready-to-flash firmware
         uses: actions/upload-artifact@v4

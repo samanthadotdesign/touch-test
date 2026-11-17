@@ -16,3 +16,8 @@ mkdir -p "$native_test_dir"
   -Itest/audio_stubs -Isrc test/audio_input_native.cpp src/audio_input.cpp \
   -o "$native_test_dir/audio"
 "$native_test_dir/audio"
+"${CXX:-c++}" -std=c++11 -Wall -Wextra -Werror \
+  -Itest/display_stubs -Isrc test/display_native.cpp src/display.cpp \
+  -o "$native_test_dir/display"
+"$native_test_dir/display" canvas
+"$native_test_dir/display" fallback

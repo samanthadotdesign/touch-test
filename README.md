@@ -116,6 +116,6 @@ python3 scripts/generate_poetry.py --check
 ./scripts/test_native.sh
 ```
 
-See [test/README](test/README) for three native C++ suites covering the production state machine, atmosphere, and audio input with host stubs. These verify behavior without an ESP32 and do not replace an ESP32 build or hardware test.
+See [test/README](test/README) for four native C++ suites covering the production state machine, atmosphere, audio input, and display initialization with host stubs. These verify behavior without an ESP32 and do not replace an ESP32 build or hardware test.
 
 Font attribution and BSD license are in `data/font5x7.json` and the generated browser font data.
