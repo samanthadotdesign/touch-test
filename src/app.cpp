@@ -17,6 +17,10 @@ bool wasDown = false, dirty = true, menuOpen = false, settingsReady = false;
 int poemIndex = -1, motionIndex = -1;
 Preferences settings;
 constexpr int MENU_TOP = 88;
+constexpr uint8_t MIC_PROFILE_VERSION = 1;
+constexpr uint8_t DEFAULT_THRESHOLD_PERCENT = 25;
+constexpr uint8_t MIN_THRESHOLD_PERCENT = 5;
+constexpr uint8_t MAX_THRESHOLD_PERCENT = 95;
 
 int pickDifferent(int count, int previous) {
   if (count <= 1) return 0;
@@ -42,8 +46,8 @@ void textAt(const char *text, int x, int y, uint16_t colour) {
 }
 void changeThreshold(int change) {
   int percent = (int)lroundf(atmosphereThreshold() * 100) + change;
-  if (percent < 35) percent = 35;
-  if (percent > 95) percent = 95;
+  if (percent < MIN_THRESHOLD_PERCENT) percent = MIN_THRESHOLD_PERCENT;
+  if (percent > MAX_THRESHOLD_PERCENT) percent = MAX_THRESHOLD_PERCENT;
   atmosphereSetThreshold(percent / 100.f);
   if (settingsReady) settings.putUChar("threshold", (uint8_t)percent);
 }
@@ -136,7 +140,17 @@ void appBegin() {
   if (settingsReady) settings.end();
   settingsReady = settings.begin("poetry", false);
   if (settingsReady) {
-    atmosphereSetThreshold(settings.getUChar("threshold", 75) / 100.f);
+    const uint8_t saved = settings.getUChar("threshold", DEFAULT_THRESHOLD_PERCENT);
+    uint8_t threshold = saved >= MIN_THRESHOLD_PERCENT && saved <= MAX_THRESHOLD_PERCENT
+        ? saved : DEFAULT_THRESHOLD_PERCENT;
+    if (settings.getUChar("micProfile", 0) < MIC_PROFILE_VERSION) {
+      // Install the gentler response once. Preserve an already-lower choice,
+      // and retry next boot if NVS cannot save the new threshold or marker.
+      if (threshold > DEFAULT_THRESHOLD_PERCENT) threshold = DEFAULT_THRESHOLD_PERCENT;
+      if (settings.putUChar("threshold", threshold) == sizeof(uint8_t))
+        settings.putUChar("micProfile", MIC_PROFILE_VERSION);
+    }
+    atmosphereSetThreshold(threshold / 100.f);
   }
   // Every boot starts colourful. NVS remembers only the last colourway so
   // consecutive boots differ; Night/Paper are temporary choices this session.

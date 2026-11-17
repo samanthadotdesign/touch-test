@@ -45,7 +45,7 @@ bool initialized = false, microphoneOn = false, pendingBlow = false;
 bool armed = true;
 AtmosphereTheme theme = ATM_COLOUR;
 uint8_t colourway = 0;
-float level = 0, detectionLevel = 0, threshold = .75f;
+float level = 0, detectionLevel = 0, threshold = ATM_DEFAULT_THRESHOLD;
 float held = 0, quiet = 0, cooldown = 0;
 float driftClock = 0, paletteClock = 0, gridAge = 0;
 
@@ -175,7 +175,7 @@ int interpolate(uint8_t a, uint8_t b, uint8_t c, uint8_t d, int fx, int fy) {
           (c * (8 - fx) + d * fx) * fy + 32) >> 6;
 }
 void resetGate() { held = quiet = cooldown = 0; armed = true; pendingBlow = false; }
-void updateGate(float dt, bool enabled) {
+void updateGate(float dt, float target, bool enabled) {
   if (!enabled) { resetGate(); return; }
   cooldown = fmaxf(0, cooldown - dt);
   if (!armed) {
@@ -183,8 +183,10 @@ void updateGate(float dt, bool enabled) {
     if (quiet + 1e-6f >= .5f && cooldown <= 1e-6f) { armed = true; held = 0; }
     return;
   }
-  held = detectionLevel >= threshold ? held + dt : 0;
-  if (held + 1e-6f < .35f) return;
+  // A real, continuing breath must stay over the threshold. Release easing
+  // keeps movement soft, but cannot turn a short click/spike into navigation.
+  held = target >= threshold && detectionLevel >= threshold ? held + dt : 0;
+  if (held + 1e-6f < .12f) return;
   pendingBlow = true;
   armed = false;
   held = quiet = 0;
@@ -196,7 +198,7 @@ void atmosphereBegin() {
   theme = ATM_COLOUR;
   colourway = 0;
   level = detectionLevel = driftClock = paletteClock = gridAge = 0;
-  threshold = .75f;
+  threshold = ATM_DEFAULT_THRESHOLD;
   microphoneOn = false;
   resetGate();
   for (int i = 0; i <= EXP_STEPS; i++) exponentials[i] = expf(-i * (16.f / EXP_STEPS));
@@ -212,9 +214,9 @@ void atmosphereUpdate(float dt, float rawLevel, bool micEnabled, bool allowAdvan
   const float target = micEnabled ? normalized(rawLevel) : 0;
   const float response = 1 - expf(-dt / (target > level ? .09f : .65f));
   level += (target - level) * response;
-  const float detectionResponse = 1 - expf(-dt / (target > detectionLevel ? .09f : .65f));
+  const float detectionResponse = 1 - expf(-dt / (target > detectionLevel ? .04f : .10f));
   detectionLevel += (target - detectionLevel) * detectionResponse;
-  updateGate(dt, micEnabled && allowAdvance);
+  updateGate(dt, target, micEnabled && allowAdvance);
   driftClock += dt * .36f * atmosphereMotionScale();
   paletteClock += dt * .12f;
   gridAge += dt;
@@ -242,7 +244,7 @@ void atmosphereSetColourway(int value) {
 uint8_t atmosphereColourway() { return colourway; }
 void atmosphereSetThreshold(float value) {
   if (!initialized) atmosphereBegin();
-  threshold = isfinite(value) ? bounded(value, .35f, .95f) : .75f;
+  threshold = isfinite(value) ? bounded(value, ATM_MIN_THRESHOLD, ATM_MAX_THRESHOLD) : ATM_DEFAULT_THRESHOLD;
   held = 0;
 }
 float atmosphereThreshold() { return threshold; }

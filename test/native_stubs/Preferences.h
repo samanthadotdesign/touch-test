@@ -17,11 +17,16 @@ class Preferences {
   }
   size_t putUChar(const char *key, uint8_t value) {
     if (readonly) return 0;
-    values()[space + "/" + key] = value;
-    writeCounts()[space + "/" + key]++;
+    const std::string path = space + "/" + key;
+    if (failedWrites()[path]) { failedWrites()[path]--; return 0; }
+    values()[path] = value;
+    writeCounts()[path]++;
     return 1;
   }
-  static void clearAll() { values().clear(); writeCounts().clear(); }
+  static void clearAll() { values().clear(); writeCounts().clear(); failedWrites().clear(); }
+  static void failNextWrites(const char *space, const char *key, size_t count = 1) {
+    failedWrites()[std::string(space) + "/" + key] = count;
+  }
   static size_t writesTo(const char *space, const char *key) {
     return writeCounts()[std::string(space) + "/" + key];
   }
@@ -33,6 +38,10 @@ class Preferences {
   static std::map<std::string, size_t> &writeCounts() {
     static std::map<std::string, size_t> counts;
     return counts;
+  }
+  static std::map<std::string, size_t> &failedWrites() {
+    static std::map<std::string, size_t> failures;
+    return failures;
   }
   std::string space;
   bool readonly = false;

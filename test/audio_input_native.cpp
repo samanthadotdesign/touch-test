@@ -58,19 +58,24 @@ int main() {
   update(10);
   assert(audioInputLevel() == 0);
   finishStartup();
-  assert(fabsf(audioInputLevel() - .644f) < .002f);
+  assert(audioInputLevel() == 1);
   const int readsBefore = audioTestI2s.reads;
   audioInputUpdate();
   assert(audioTestI2s.reads - readsBefore == 8);
   audioTestI2s.repeat = false;
-  audioTestI2s.blocks.push_back(block(0, 3277));
+  audioTestI2s.blocks.push_back(block(0, 655));
   update();
-  assert(fabsf(audioInputLevel() - .644f) < .002f);
+  assert(fabsf(audioInputLevel() - .306f) < .002f); // quiet .02 RMS breath
+  audioTestI2s.blocks.push_back(block(655, 0)); update();
+  assert(fabsf(audioInputLevel() - .306f) < .002f); // either active mono slot
   // No data eventually clears stale levels rather than latching a strong blow.
-  update(9); assert(audioInputLevel() > .6f);
+  update(9); assert(audioInputLevel() > .3f);
   update(); assert(audioInputLevel() == 0);
   audioTestI2s.blocks.push_back(block(32767, 0)); update(); assert(audioInputLevel() == 1);
-  audioTestI2s.blocks.push_back(block(163, 0)); update(); assert(audioInputLevel() == 0);
+  audioTestI2s.blocks.push_back(block(65, 0)); update(); assert(audioInputLevel() == 0);
+  audioTestI2s.blocks.push_back(block(0, 98)); update(); assert(audioInputLevel() == 0);
+  audioTestI2s.blocks.push_back(block(163, 0)); update();
+  assert(audioInputLevel() > .03f && audioInputLevel() < .04f);
 
   const int stopsBefore = audioTestI2s.stops;
   assert(audioInputSetEnabled(false));
@@ -91,7 +96,7 @@ int main() {
   audioInputSetEnabled(false); update();
   assert(audioInputSetEnabled(true)); finishStartup();
   assert(audioInputEnabled() && audioTestI2s.running);
-  audioTestI2s.blocks.push_back(block(3277, 0)); update(); assert(audioInputLevel() > .64f);
+  audioTestI2s.blocks.push_back(block(655, 0)); update(); assert(audioInputLevel() > .3f);
 
   audioTestI2s.readResult = ESP_FAIL; update();
   assert(!audioInputAvailable() && !audioInputEnabled() && !audioTestI2s.installed && audioInputLevel() == 0);

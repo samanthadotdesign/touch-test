@@ -169,7 +169,7 @@ void colourwayVariation() {
 void oneEventPerBreath() {
   atmosphereBegin();
   const int frames = untilBlow();
-  assert(frames >= 35 && frames <= 100);
+  assert(frames >= 12 && frames <= 30);
   assert(!atmosphereTakeBlow());
   assert(update(1000, 1) == 0);  // A held blow never skips ahead again.
   assert(update(10, 0) == 0);
@@ -190,7 +190,7 @@ void menuAndThreshold() {
   atmosphereBegin();
   assert(update(300, 1, true, false) == 0);
   assert(atmosphereLevel() > .99f);  // The menu suppresses advancement, not pressure.
-  assert(update(34, 1) == 0);
+  assert(update(11, 1) == 0);
   assert(update(1, 1) == 1);
   atmosphereUpdate(.01f, 1, false);
   assert(!atmosphereTakeBlow());
@@ -199,14 +199,50 @@ void menuAndThreshold() {
   atmosphereSetThreshold(10);
   assert(atmosphereThreshold() == .95f);
   atmosphereSetThreshold(-10);
-  assert(atmosphereThreshold() == .35f);
+  assert(atmosphereThreshold() == .05f);
   atmosphereSetThreshold(NAN);
-  assert(atmosphereThreshold() == .75f);
+  assert(atmosphereThreshold() == .25f);
   atmosphereBegin();
-  assert(update(30, 1) == 0);
+  assert(update(10, 1) == 0);
   atmosphereSetThreshold(.9f);
-  assert(update(34, 1) == 0);
+  assert(update(11, 1) == 0);
   assert(update(1, 1) == 1);
+}
+
+void gentleBreathsAndSpikes() {
+  atmosphereBegin();
+  assert(atmosphereThreshold() == .25f);
+  assert(update(200, .1f) == 0);
+  assert(atmosphereBlowForce() > .09f); // gentle movement below navigation strength
+
+  for (float gentle : {.306f, .35f}) {
+    atmosphereBegin();
+    int elapsed = 0;
+    for (; elapsed < 30; elapsed++) if (update(1, gentle)) break;
+    assert(elapsed >= 11 && elapsed < 30); // gentle breath responds in under .3s
+    assert(update(300, gentle) == 0); // sustained gentle breath still triggers once
+    assert(update(20, 0) == 0);
+    assert(update(100, gentle) == 0); // quiet period is shorter than the .5s rearm
+    assert(update(200, 0) == 0);
+    assert(update(30, gentle) == 1);
+  }
+
+  // A full-scale click/handling spike never finishes from a smoothed tail.
+  for (int spikeFrames : {1, 5, 11}) {
+    atmosphereBegin();
+    assert(update(spikeFrames, 1) == 0);
+    assert(update(300, 0) == 0);
+  }
+  atmosphereBegin();
+  atmosphereUpdate(.1f, 1, true);
+  assert(!atmosphereTakeBlow());
+  atmosphereUpdate(.1f, 0, true);
+  assert(!atmosphereTakeBlow());
+
+  atmosphereBegin();
+  atmosphereSetThreshold(.05f);
+  assert(update(200, .04f) == 0);
+  assert(update(30, .1f) == 1); // the menu can tune navigation to a lighter breath
 }
 }  // namespace
 
@@ -219,5 +255,6 @@ int main() {
   colourwayVariation();
   oneEventPerBreath();
   menuAndThreshold();
+  gentleBreathsAndSpikes();
   puts("Native atmosphere checks passed (CPU background, colourways, themes, pressure, breath gate)");
 }

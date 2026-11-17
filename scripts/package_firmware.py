@@ -47,8 +47,11 @@ def package_firmware(source, target, env):
         "and blow threshold. The menu closes after six seconds. Every restart opens "
         "Colour fields with a different starting colourway; Night/Paper last for "
         "the current session. See COLOURWAYS.md for the Figma palette source. Mic starts off. "
-        "Enable it, blow gently to spread the scene, or hold a strong blow to reveal "
-        "the poem. Release before another blow advances to the next moving poem.\n",
+        "The microphone uses a sensitive 25% threshold (adjustable 5-95%). The "
+        "first boot replaces the older saved threshold; later adjustments persist. "
+        "Enable it and blow gently to spread the scene. Sound above the threshold "
+        "for 0.12 seconds acts like a tap, revealing the poem. Release into quiet "
+        "before another sound advances to the next moving poem.\n",
         encoding="utf-8")
     project = Path(env.subst("$PROJECT_DIR"))
     shutil.copy2(project / "docs" / "COLOURWAYS.md", destination / "COLOURWAYS.md")

@@ -44,6 +44,8 @@ constexpr uint32_t kStaleMs = 100;
 constexpr size_t kFramesPerBuffer = 128;
 constexpr size_t kDmaBuffers = 8;
 constexpr size_t kRegisterBudget = 4;
+constexpr float kNoiseFloor = .003f;
+constexpr float kLevelGain = 18.f;
 
 struct RegisterValue { uint8_t reg, value; };
 
@@ -212,7 +214,7 @@ void audioInputUpdate() {
     // The codec is mono. Use its active slot without halving the amplitude when
     // the other stereo slot is silent; RMS is independent of DMA slot ordering.
     const float rms = sqrtf(fmaxf(energy[0], energy[1]) / static_cast<float>(frames));
-    level = fminf(1.0f, fmaxf(0.0f, (rms - 0.008f) * 7.0f));
+    level = fminf(1.0f, fmaxf(0.0f, (rms - kNoiseFloor) * kLevelGain));
     lastDataMs = now;
   } else if (now - lastDataMs >= kStaleMs) {
     level = 0;

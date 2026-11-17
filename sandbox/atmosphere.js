@@ -11,37 +11,44 @@
     if (!samples.length) return 0;
     let energy = 0;
     for (const sample of samples) energy += sample * sample;
-    // Leave room above normal speech; a small noise floor keeps quiet rooms calm.
-    return clamp((Math.sqrt(energy / samples.length) - .008) * 7, 0, 1);
+    // A gentle breath is enough to tap; retain a small floor for quiet rooms.
+    return clamp((Math.sqrt(energy / samples.length) - .003) * 18, 0, 1);
   }
   function smoothLevel(current, target, seconds) {
     const dt = clamp(Number.isFinite(seconds) ? seconds : 0, 0, .1);
     return current + (target - current) * (1 - Math.exp(-dt / (target > current ? .09 : .65)));
   }
+  function smoothDetectionLevel(current, target, seconds) {
+    const dt = clamp(Number.isFinite(seconds) ? seconds : 0, 0, .1);
+    return current + (target - current) * (1 - Math.exp(-dt / (target > current ? .04 : .10)));
+  }
   function motionScale(level, active = false) {
     return Math.min(5, (active ? 1.25 : 1) + clamp(level, 0, 1) * 3.75);
   }
 
-  function createBlowGate({threshold = .75, holdSeconds = .35, releaseSeconds = .5, cooldownSeconds = 1.6} = {}) {
-    threshold = clamp(Number.isFinite(threshold) ? threshold : .75, .35, .95);
+  function createBlowGate({threshold = .25, holdSeconds = .12, releaseSeconds = .5, cooldownSeconds = 1.6} = {}) {
+    threshold = clamp(Number.isFinite(threshold) ? threshold : .25, .05, .95);
     let held = 0, quiet = 0, cooldown = 0, armed = true;
     return {
       get threshold() { return threshold; },
       get progress() { return clamp(held / holdSeconds, 0, 1); },
       get armed() { return armed; },
       reset() { held = quiet = cooldown = 0; armed = true; },
-      setThreshold(value) { threshold = clamp(Number.isFinite(value) ? value : .75, .35, .95); held = 0; },
-      update(level, seconds, enabled = true) {
+      setThreshold(value) { threshold = clamp(Number.isFinite(value) ? value : .25, .05, .95); held = 0; },
+      update(level, seconds, enabled = true, rawLevel = level) {
         if (!enabled) { this.reset(); return false; }
         const dt = clamp(Number.isFinite(seconds) ? seconds : 0, 0, .1);
         const strength = clamp(Number.isFinite(level) ? level : 0, 0, 1);
+        const rawStrength = clamp(Number.isFinite(rawLevel) ? rawLevel : 0, 0, 1);
         cooldown = Math.max(0, cooldown - dt);
         if (!armed) {
           quiet = strength <= Math.min(.25, threshold * .45) ? quiet + dt : 0;
           if (quiet + 1e-9 >= releaseSeconds && cooldown <= 1e-9) { armed = true; held = 0; }
           return false;
         }
-        held = strength >= threshold ? held + dt : 0;
+        // The real input must remain above threshold. A brief spike's decay
+        // tail can keep the visual/detection smoothing high after sound stops.
+        held = strength >= threshold && rawStrength >= threshold ? held + dt : 0;
         if (held + 1e-9 < holdSeconds) return false;
         armed = false;
         held = quiet = 0;
@@ -262,10 +269,10 @@
         level = smoothLevel(level, target, seconds);
         // Keep the movement easing continuous while each new audio source gets
         // a fresh detection signal, so leftover preview pressure cannot advance.
-        detectionLevel = smoothLevel(detectionLevel, target, seconds);
+        detectionLevel = smoothDetectionLevel(detectionLevel, target, seconds);
         // One held breath produces one navigation. A quiet release rearms it.
         const canBlow = (micState === 'on' || (micState === 'off' && previewEngaged)) && sheet.hidden && !document.hidden;
-        const crossed = blowGate.update(detectionLevel, seconds, canBlow);
+        const crossed = blowGate.update(detectionLevel, seconds, canBlow, target);
         if (crossed) {
           const accepted = onBlow();
           if (blowFeedback) blowFeedback.textContent = accepted === false

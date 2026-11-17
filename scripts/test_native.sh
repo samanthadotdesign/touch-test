@@ -21,3 +21,8 @@ mkdir -p "$native_test_dir"
   -o "$native_test_dir/display"
 "$native_test_dir/display" canvas
 "$native_test_dir/display" fallback
+"${CXX:-c++}" -std=c++11 -Wall -Wextra -Werror \
+  -Itest/native_stubs -Isrc -I'.pio/libdeps/esp32s3/GFX Library for Arduino/src' \
+  test/microphone_profile_native.cpp src/app.cpp src/letters.cpp src/atmosphere.cpp \
+  -o "$native_test_dir/microphone-profile"
+"$native_test_dir/microphone-profile"
