@@ -135,7 +135,7 @@ test('small font, explicit blank lines, and all three reading layouts',()=>{
   if(mode==='left'){close(starts[0],starts[1]);close(starts[1],starts[2]);}
   if(mode==='stepped'){close(starts[1]-starts[0],8);close(starts[2]-starts[1],8);}
  }
- assert.throws(()=>layout('x'.repeat(29)));assert.throws(()=>layout(Array(20).fill('word').join('\n')));
+ assert.throws(()=>layout('x'.repeat(29)));assert.throws(()=>layout(Array(23).fill('word').join('\n')));
  for(const p of source.poems){const l=layout(p.text,p.layout);assert.equal(l.size,1);assert.ok(l.words.every(w=>w.x-w.width/2>=-108&&w.x+w.width/2<=108));}
 });
 test('all eight motion families project safely and depth shades are perceptibly different',()=>{
@@ -203,3 +203,16 @@ test('formation settings migrate and round trip without overriding explicit choi
 test('condensed cloud centers vary between scenes while drifting continuously',()=>{const m={...source.animations[0],formation:'cluster'},centers=[];for(const seed of Array.from({length:32},(_,i)=>i)){const center=time=>{const points=Array.from({length:180},(_,i)=>i).filter(i=>particleRandom(seed,i,13)<.74).map(i=>project(0,0,fieldPose(i,180,time,m,6,seed),m.perspective));return[points.reduce((s,p)=>s+p[0],0)/points.length,points.reduce((s,p)=>s+p[1],0)/points.length];};const a=center(0),b=center(.05);assert.ok(Math.hypot(a[0]-b[0],a[1]-b[1])<1);centers.push(a);}assert.ok(Math.max(...centers.map(p=>p[0]))-Math.min(...centers.map(p=>p[0]))>70);assert.ok(Math.max(...centers.map(p=>p[1]))-Math.min(...centers.map(p=>p[1]))>100);});
 
 test('smart punctuation renders with device glyph aliases while source text stays intact',()=>{const d=clone(),original='Others’ lives—“a story”…';d.poems[0].text=original;d.poems[0].title='';assert.doesNotThrow(()=>validateLibrary(d));assert.equal(d.poems[0].text,original);assert.equal(d.poems[0].title,'');assert.equal(displayText(original),`Others' lives-"a story"...`);assert.equal(layout(original).words.map(w=>w.text).join(' '),`Others' lives-"a story"...`);const e=new Experience(d,()=>0);e.selectPoem(0);assert.equal(e.poem.text,original);assert.ok(e.units().every(u=>/^[\x20-\x7e]+$/.test(u.text)));});
+
+test('long verse tightens spacing while preserving blank lines and author clearance',()=>{
+ const text=Array.from({length:20},(_,i)=>i===4||i===9||i===15?'':'line').join('\n');
+ for(const mode of ['centered','left','stepped-zigzag']){
+  const a=layout(text,mode),first=a.words[0],last=a.words.at(-1);
+  assert.equal(last.line,19);close(last.y-first.y,19*13);
+  assert.equal(a.words.find(w=>w.line===5).y-a.words.find(w=>w.line===3).y,26);
+  assert.ok(first.y-4>=-144);assert.ok(a.authorY+8<=304);
+  assert.ok(a.authorY-(last.y+160+4)>=20);
+ }
+ assert.doesNotThrow(()=>layout(Array(22).fill('word').join('\n')));
+ assert.throws(()=>layout(Array(23).fill('word').join('\n')));
+});

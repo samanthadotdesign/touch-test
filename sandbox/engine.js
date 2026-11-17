@@ -28,7 +28,7 @@
     }
     if(!LAYOUTS.includes(readingLayout))throw Error('Choose a supported reading layout.');
     if(text.length>512||text.trim().split(/\s+/).length>96)throw Error('This poem exceeds the display text limit.');
-    const size=1,advance=6,pitch=14,lines=[[]];let width=0,sourceOffset=0;
+    const size=1,advance=6,lines=[[]];let width=0,sourceOffset=0;
     for(const [index,paragraph] of text.split('\n').entries()) {
       if(index){lines.push([]);width=0;}
       for(const match of paragraph.matchAll(/[^ ]+/g)) {
@@ -48,7 +48,8 @@
     if(['centered','left','stepped','stepped-reverse','stepped-zigzag'].includes(readingLayout)){
       const indent=i=>readingLayout==='stepped'?i*8:readingLayout==='stepped-reverse'?(l-1-i)*8:readingLayout==='stepped-zigzag'?(i%4<=2?i%4:4-i%4)*12:0;
       const groupWidth=Math.max(...widths.map((w,i)=>w+indent(i)));
-      const bodyH=l*pitch-6,totalH=bodyH+28;if(totalH>288||groupWidth>216)fail();
+      const pitch=l>1?Math.max(12,Math.min(14,Math.floor(252/(l-1)))):14;
+      const bodyH=(l-1)*pitch+8,totalH=bodyH+28;if(totalH>288||groupWidth>216)fail();
       const top=(320-totalH)/2;authorY=top+bodyH+20;
       for(const word of words){const i=word.line,left=readingLayout==='centered'?(240-widths[i])/2:(240-groupWidth)/2+indent(i);word.x=left+word.offset+word.width/2;word.y=top+i*pitch+4;}
     }else if(readingLayout==='constellation'){

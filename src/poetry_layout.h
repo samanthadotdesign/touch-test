@@ -23,7 +23,7 @@ inline bool poetryLayout(const char *text, PoetryLayout &out, uint8_t arrangemen
   float widths[POETRY_MAX_WORDS + 1] = {};
   int line = 0;
   out.count = 0;
-  const int advance = 6 * size, lineHeight = 8 * size + 6;
+  const int advance = 6 * size;
   const size_t length = strlen(text);
   if (length > POETRY_MAX_CHARS) return false;
   for (size_t p = 0; p < length;) {
@@ -151,7 +151,9 @@ inline bool poetryLayout(const char *text, PoetryLayout &out, uint8_t arrangemen
     }
     return true;
   }
-  const float bodyHeight = lines * lineHeight - 6;
+  // Tighten long verse only, keeping at least four pixels between glyph rows.
+  const int lineHeight = lines > 1 ? (int)fmaxf(12, fminf(14, 252 / (lines - 1))) : 14;
+  const float bodyHeight = (lines - 1) * lineHeight + 8;
   const float totalHeight = bodyHeight + 20 + 8;
   if (totalHeight > 288) return false;
   const auto indent = [lines, arrangement](int i) -> float {

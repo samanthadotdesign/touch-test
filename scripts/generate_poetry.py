@@ -93,7 +93,8 @@ def layout_size(text, layout="random"):
         raise ValueError("poem cannot fit any supported reading layout")
     widths = [len(line) * 6 for line in lines]
     count, line_count = len(words), len(lines)
-    body_height = line_count * 14 - 6
+    pitch = max(12, min(14, 252 // (line_count - 1))) if line_count > 1 else 14
+    body_height = (line_count - 1) * pitch + 8
     if layout in ("centered", "left", "stepped", "stepped-reverse", "stepped-zigzag") and body_height + 20 + 8 > 288:
         raise ValueError("poem cannot fit the 240x320 display at font size 1")
     if layout in ("stepped", "stepped-reverse", "stepped-zigzag"):

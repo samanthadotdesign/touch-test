@@ -36,6 +36,83 @@ globalThis.POETRY_DATA = {
       "text": "We spend our entire lives trying to tell stories about ourselves—they’re the essence of memory. It is how we make living in this unfeeling, accidental universe tolerable.",
       "by": "Ken Liu",
       "layout": "random"
+    },
+    {
+      "id": "make-sure-the-things-we-do",
+      "title": "Make sure the things we do",
+      "text": "Make sure the things we do to make ourselves feel better don't make us feel worse.",
+      "by": "Gretchen Rubin",
+      "layout": "random"
+    },
+    {
+      "id": "act-the-way-i-want-to-feel",
+      "title": "Act the way I want to feel",
+      "text": "Act the way I want to feel. It's easy to assume that we act beacuse of the way we feel, but to a very great degree, we feel because of the way we act.",
+      "by": "Gretchen Rubin",
+      "layout": "random"
+    },
+    {
+      "id": "if-you-want-to-create-something-worthwhile",
+      "title": "If you want to create something worthwhile",
+      "text": "If you want to create something worthwhile with your life, you need to draw a line between the world's demands and your own ambitions.",
+      "by": "Mark McGuinness",
+      "layout": "random"
+    },
+    {
+      "id": "i-went-to-the-woods",
+      "title": "I went to the woods",
+      "text": "I went to the woods because I wished to live deliberately, to front only the essential facts of life, and see if I could not learn what it had to teach, and not, when I came to die, discover that I had not lived.",
+      "by": "Henry David Thoreau",
+      "layout": "random"
+    },
+    {
+      "id": "you-can-t-try-to-do-things",
+      "title": "You can't try to do things",
+      "text": "You can't try to do things, you must simple do them.",
+      "by": "Ray Bradbury",
+      "layout": "random"
+    },
+    {
+      "id": "work-to-become",
+      "title": "Work to become",
+      "text": "Work to become, not to acquire.",
+      "by": "Elbert Hubbard",
+      "layout": "random"
+    },
+    {
+      "id": "being-right-keeps-you-in-place",
+      "title": "Being right keeps you in place",
+      "text": "Being right keeps you in place, being wrong forces you to explore.",
+      "by": "Steve Johnson",
+      "layout": "random"
+    },
+    {
+      "id": "uncertainty-is-an-uncomfortable-position",
+      "title": "Uncertainty is an uncomfortable position",
+      "text": "Uncertainty is an uncomfortable position. But certainty is an absurd one.",
+      "by": "Voltaire",
+      "layout": "random"
+    },
+    {
+      "id": "sea-rose",
+      "title": "Sea Rose",
+      "text": "\"Rose, harsh rose,\nmarred and with stint of petals,\nmeagre flower, thin,\nsparse of leaf,\n\nmore precious\nthan a wet rose\nsingle on a stem-\nyou are caught in the drift.\n\nStunted, with small leaf,\nyou are flung on the sand,\nyou are lifted\nin the crisp sand\nthat drives in the wind.\n\nCan the spice-rose\ndrip such acrid fragrance\nhardened in a leaf?\"",
+      "by": "H.D.",
+      "layout": "random"
+    },
+    {
+      "id": "and-once-the-storm-is-over",
+      "title": "Kafka on the Shore",
+      "text": "\"And once the storm is over, you won't remember how you made it through, how you managed to survive. You won't even be sure, whether the storm is really over. But one thing is certain. When you come out of the storm, you won't be the same person who walked in. That's what this storm's all about.\"",
+      "by": "Haruki Murakami",
+      "layout": "random"
+    },
+    {
+      "id": "every-one-of-us-is-losing",
+      "title": "Kafka on the Shore",
+      "text": "\"Every one of us is losing something precious to us. Lost opportunities, lost possibilities, feelings we can never get back again. That's part of what it means to be alive.\"",
+      "by": "Haruki Murakami",
+      "layout": "random"
     }
   ],
   "animations": [
@@ -146,7 +223,7 @@ globalThis.POETRY_DATA = {
   ]
 };
 
-globalThis.POETRY_SOURCE_REVISION = "f778a16cf198d4af9cda0702cce67202997c50c5e9262b105c5fccb25867f00d";
+globalThis.POETRY_SOURCE_REVISION = "86b29c71d3cb03c0c6a5d4fee3c32003e525f438e80606a16975444437aa9365";
 
 /* ASCII font from Adafruit GFX; see data/font5x7.json for provenance.
 Software License Agreement (BSD License)

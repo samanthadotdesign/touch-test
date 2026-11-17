@@ -79,7 +79,25 @@ int main() {
   assert(fabsf((layout.words[0].x - 18) - (layout.words[2].x - 3)) < .001f);
   assert(poetryLayout("one\ntwo", layout, 2));
   assert(fabsf(layout.words[1].x - layout.words[0].x - 8) < .001f);
-  assert(!poetryLayout("a\na\na\na\na\na\na\na\na\na\na\na\na\na\na\na\na\na\na\na\na", layout, 2));
+  assert(!poetryLayout("a\na\na\na\na\na\na\na\na\na\na\na\na\na\na\na\na\na\na\na\na\na\na", layout, 2));
+  std::string longVerse;
+  for (int i = 0; i < 20; i++) {
+    if (i) longVerse += "\n";
+    if (i != 4 && i != 9 && i != 15) longVerse += "line";
+  }
+  for (uint8_t choice : {0, 1, 10}) {
+    assert(poetryLayout(longVerse.c_str(), layout, choice));
+    assert(layout.words[layout.count - 1].line == 19);
+    assert(fabsf(layout.words[layout.count - 1].y - layout.words[0].y - 247) < .001f);
+    assert(layout.words[0].y - 4 >= -144);
+    assert(layout.authorY + 8 <= 304);
+    assert(layout.authorY - (layout.words[layout.count - 1].y + 164) >= 20);
+  }
+  std::string denseVerse = "word";
+  for (int i = 1; i < 22; i++) denseVerse += "\nword";
+  assert(poetryLayout(denseVerse.c_str(), layout));
+  denseVerse += "\nword";
+  assert(!poetryLayout(denseVerse.c_str(), layout));
   // Authored fixture keeps layout/glyph tests independent of the user's corpus.
   const Poem fixedPoem = {"fixture", "Fixture",
     "A small light\nleans into dusk.\nThe room remembers\nhow to be still.", "Test", 0};
