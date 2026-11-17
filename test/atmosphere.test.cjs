@@ -3,13 +3,14 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
 const vm=require('node:vm');
-const {levelFromSamples,smoothLevel,motionScale,createBlowGate,THEME_KEY,HIDE_DELAY}=require('../sandbox/atmosphere.js');
+const {levelFromSamples,smoothLevel,motionScale,createBlowGate,THEME_KEY,COLOURWAY_KEY,HIDE_DELAY}=require('../sandbox/atmosphere.js');
 
 function deferred(){let resolve,reject;const promise=new Promise((yes,no)=>{resolve=yes;reject=no;});return{promise,resolve,reject};}
 
 // The controller runs unchanged; only browser DOM, clock, and audio devices are supplied.
-function atmosphereHarness({saved=null,blockedStorage=false,getUserMedia,resumeAudio,onBlowResult=true}={}){
- const listeners=new Map(),timers=new Map(),writes=[],contexts=[],requests=[];
+function atmosphereHarness({saved=null,savedColourway=null,storage,random=()=>.5,blockedStorage=false,getUserMedia,resumeAudio,onBlowResult=true}={}){
+ const listeners=new Map(),timers=new Map(),writes=[],reads=[],contexts=[],requests=[];
+ const storageValues=storage||new Map([[THEME_KEY,saved],[COLOURWAY_KEY,savedColourway]]);
  let now=0,nextTimer=0,blows=0,sampleValue=0;
  const document={activeElement:null,hidden:false};
  function element(name){
@@ -40,15 +41,16 @@ function atmosphereHarness({saved=null,blockedStorage=false,getUserMedia,resumeA
   createAnalyser(){return this.analyser;}
   createMediaStreamSource(){return this.source;}
  }
- const environment={document,AudioContext,Float32Array,module:{exports:{}},
+ const math=Object.create(Math);math.random=random;
+ const environment={document,AudioContext,Float32Array,Math:math,module:{exports:{}},
   navigator:{mediaDevices:{getUserMedia:constraints=>{requests.push(constraints);return getUserMedia?getUserMedia(constraints):Promise.reject(Object.assign(Error('Denied'),{name:'NotAllowedError'}));}}},
-  localStorage:{getItem:key=>{assert.equal(key,THEME_KEY);if(blockedStorage)throw Error('denied');return saved;},setItem:(key,value)=>{if(blockedStorage)throw Error('denied');writes.push([key,value]);}},
+  localStorage:{getItem:key=>{reads.push(key);if(blockedStorage)throw Error('denied');return storageValues.get(key)??null;},setItem:(key,value)=>{if(blockedStorage)throw Error('denied');writes.push([key,value]);storageValues.set(key,value);}},
   addEventListener:(type,handler)=>{const list=listeners.get(type)||[];list.push(handler);listeners.set(type,list);},
   setTimeout:(callback,delay)=>{const id=++nextTimer;timers.set(id,{callback,at:now+delay});return id;},clearTimeout:id=>timers.delete(id)
  };
  vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../sandbox/atmosphere.js'),'utf8'),environment);
  const controller=environment.module.exports.createController(screen,{onBlow:()=>{blows++;return onBlowResult;}});
- return{controller,screen,hotspot,sheet,backdrop,close,choices,mic,status,meter,bar,preview,output,notice,threshold,thresholdOutput,blowFeedback,marker,writes,contexts,requests,document,
+ return{controller,screen,hotspot,sheet,backdrop,close,choices,mic,status,meter,bar,preview,output,notice,threshold,thresholdOutput,blowFeedback,marker,writes,reads,storage:storageValues,contexts,requests,document,
   get blows(){return blows;},get pendingTimers(){return timers.size;},
   sample:value=>{sampleValue=value;},
   dispatch:(type,properties={})=>{for(const handler of listeners.get(type)||[])handler(properties);},
@@ -108,18 +110,44 @@ test('theme sheet starts hidden, opens from the invisible hotspot, and resets it
  app.hotspot.dispatch('click');assert.equal(app.backdrop.dispatch('pointerdown'),true);assert.equal(app.sheet.hidden,true);
  app.hotspot.dispatch('click');assert.equal(app.sheet.dispatch('keydown',{key:'Escape'}),true);assert.equal(app.sheet.hidden,true);
 });
-test('theme choices persist independently, update the display, and tolerate blocked storage',()=>{
- const app=atmosphereHarness({saved:'dark'});assert.equal(app.controller.theme,'dark');assert.equal(app.screen.dataset.theme,'dark');
+test('theme choices affect only the current session and ignore legacy stored themes',()=>{
+ const app=atmosphereHarness({saved:'dark'});assert.equal(app.controller.theme,'colour');assert.equal(app.screen.dataset.theme,'colour');
+ const colourway=app.controller.colourway,writes=app.writes.length;
  for(const [index,theme] of ['dark','light','colour'].entries()){
   app.hotspot.dispatch('click');app.choices[index].dispatch('click');assert.equal(app.controller.theme,theme);assert.equal(app.screen.dataset.theme,theme);
-  assert.equal(app.choices[index].attributes.get('aria-pressed'),'true');assert.deepEqual(app.writes.at(-1),[THEME_KEY,theme]);
+  assert.equal(app.choices[index].attributes.get('aria-pressed'),'true');assert.equal(app.writes.length,writes);assert.equal(app.controller.colourway,colourway);
   app.advance(5999);assert.equal(app.sheet.hidden,false);app.advance(1);assert.equal(app.sheet.hidden,true);
  }
- const count=app.writes.length;app.dispatch('storage',{key:THEME_KEY,newValue:'light'});assert.equal(app.controller.theme,'light');assert.equal(app.writes.length,count);
- app.dispatch('storage',{key:'poetry-library',newValue:'dark'});assert.equal(app.controller.theme,'light');
- app.dispatch('storage',{key:null,newValue:null});assert.equal(app.controller.theme,'colour');
- const blocked=atmosphereHarness({blockedStorage:true});assert.doesNotThrow(()=>blocked.controller.setTheme('dark'));assert.equal(blocked.controller.theme,'dark');
- blocked.controller.setTheme('invalid');assert.equal(blocked.controller.theme,'dark');
+ app.controller.setTheme('dark');app.dispatch('storage',{key:THEME_KEY,newValue:'light'});assert.equal(app.controller.theme,'dark');
+ app.dispatch('storage',{key:null,newValue:null});assert.equal(app.controller.theme,'dark');
+ app.controller.setTheme('invalid');assert.equal(app.controller.theme,'dark');
+ assert.equal(app.reads.includes(THEME_KEY),false);
+ const reloaded=atmosphereHarness({storage:app.storage});assert.equal(reloaded.controller.theme,'colour');
+ assert.notEqual(reloaded.controller.colourway,colourway);
+});
+test('every reload selects and saves a different one of the three colourways',()=>{
+ const storage=new Map([[THEME_KEY,'light']]);let previous=-1;
+ const picked=new Set();
+ for(let restart=0;restart<30;restart++){
+  const app=atmosphereHarness({storage,random:()=>restart%3/3});
+  const current=app.controller.colourway;assert.ok(Number.isInteger(current)&&current>=0&&current<3);
+  assert.notEqual(current,previous);assert.equal(app.controller.theme,'colour');assert.equal(app.screen.dataset.colourway,String(current));
+  assert.deepEqual(app.writes,[[COLOURWAY_KEY,String(current)]]);assert.equal(storage.get(COLOURWAY_KEY),String(current));
+  picked.add(current);previous=current;app.controller.setTheme('dark');assert.equal(app.writes.length,1);
+ }
+ assert.equal(picked.size,3);
+ for(let previous=0;previous<3;previous++)for(const random of [()=>0,()=>.999999]){
+  const app=atmosphereHarness({savedColourway:String(previous),random});assert.notEqual(app.controller.colourway,previous);
+ }
+});
+test('corrupt or blocked colourway storage still opens colourfully without crashing',()=>{
+ for(const savedColourway of [null,'','bad','-1','3','1.5','null','{"colourway":1}',' 1','01']){
+  const app=atmosphereHarness({saved:'dark',savedColourway,random:()=>.999999});
+  assert.equal(app.controller.theme,'colour');assert.equal(app.controller.colourway,2);assert.deepEqual(app.writes,[[COLOURWAY_KEY,'2']]);
+ }
+ const blocked=atmosphereHarness({saved:'light',blockedStorage:true,random:()=>0});
+ assert.equal(blocked.controller.theme,'colour');assert.equal(blocked.controller.colourway,0);assert.equal(blocked.writes.length,0);
+ assert.doesNotThrow(()=>blocked.controller.setTheme('light'));assert.equal(blocked.controller.theme,'light');
 });
 test('sound preview accelerates smoothly without microphone permission and shader status is visible only on failure',()=>{
  const app=atmosphereHarness();assert.equal(app.controller.step(.1),1);
@@ -186,12 +214,12 @@ test('blows stay inert while the theme sheet or document is hidden',()=>{
  app.document.hidden=false;for(let i=0;i<12;i++)app.controller.step(.1);assert.equal(app.blows,1);
 });
 test('a rejected navigation consumes the breath and threshold controls tune a new breath',()=>{
- const app=atmosphereHarness({onBlowResult:false});app.preview.value='100';app.preview.dispatch('input');
+ const app=atmosphereHarness({onBlowResult:false}),writes=app.writes.length;app.preview.value='100';app.preview.dispatch('input');
  for(let i=0;i<40;i++)app.controller.step(.1);assert.equal(app.blows,1);
  app.preview.value='0';app.preview.dispatch('input');for(let i=0;i<30;i++)app.controller.step(.1);
  app.threshold.value='40';app.threshold.dispatch('input');assert.equal(app.thresholdOutput.textContent,'40%');assert.equal(app.marker.style.left,'40%');
  app.preview.value='50';app.preview.dispatch('input');for(let i=0;i<12;i++)app.controller.step(.1);assert.equal(app.blows,2);
- assert.equal(app.writes.length,0,'threshold tuning stays in this session');
+ assert.equal(app.writes.length,writes,'threshold tuning stays in this session');
 });
 test('microphone denial closes audio resources and leaves the preview available',async()=>{
  const app=atmosphereHarness();app.hotspot.dispatch('click');await app.controller.toggleMic();

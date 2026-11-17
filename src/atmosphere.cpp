@@ -16,6 +16,8 @@ struct Colour { float r, g, b; };
 struct Stop { float position; Colour colour; };
 struct Blob { float x, y, inverseRadius; Colour colour; };
 
+// Figma Frame 33:31 shader: active Palette 1, 2 and 3 (Palette 4 is inactive).
+// https://www.figma.com/design/nVvkRzyAbBU2QTXQGdhttv/motion?node-id=33-31
 const Stop PALETTE_1[] = {
   {0.f, {.96f, .93f, .83f}}, {.32f, {.88f, .80f, .44f}},
   {.65f, {.64f, .43f, .57f}}, {1.f, {.65f, .78f, .87f}}
@@ -42,6 +44,7 @@ float exponentials[EXP_STEPS + 1];
 bool initialized = false, microphoneOn = false, pendingBlow = false;
 bool armed = true;
 AtmosphereTheme theme = ATM_COLOUR;
+uint8_t colourway = 0;
 float level = 0, detectionLevel = 0, threshold = .75f;
 float held = 0, quiet = 0, cooldown = 0;
 float driftClock = 0, paletteClock = 0, gridAge = 0;
@@ -86,11 +89,12 @@ Colour colourPalette(int index, float position) {
 Colour evolvingPalette(float position, float phase, float rate) {
   if (theme == ATM_NIGHT) return ramp(NIGHT, 4, position);
   if (theme == ATM_PAPER) return ramp(PAPER, 4, position);
-  const float progress = paletteClock * rate + phase;
-  const float cycle = progress - floorf(progress / 3.f) * 3.f;
+  const float progress = paletteClock * rate + phase + colourway;
+  const float count = ATM_COLOURWAY_COUNT;
+  const float cycle = progress - floorf(progress / count) * count;
   const int current = (int)cycle;
   return blend(colourPalette(current, position),
-               colourPalette((current + 1) % 3, position), smooth(fract(cycle)));
+               colourPalette((current + 1) % ATM_COLOURWAY_COUNT, position), smooth(fract(cycle)));
 }
 float gaussian(float exponent) {
   // Lookup replaces almost 9,000 expf calls for each grid update.
@@ -126,7 +130,7 @@ void rebuildGrid() {
         .28f * sinf(palettePhase * .43f + r2 * 6));
     blobs[i] = {x * metricX, y * metricY,
                 mix(8.f, 2.7f, .72f) / (radius * radius),
-                evolvingPalette(position, r2 * 3 + i * .381966f, .88f + r3 * .24f)};
+                evolvingPalette(position, r2 * ATM_COLOURWAY_COUNT + i * .381966f, .88f + r3 * .24f)};
   }
   const Colour base = evolvingPalette(.12f, 0, 1);
   for (int gy = 0; gy < GRID_H; gy++) {
@@ -190,6 +194,7 @@ void updateGate(float dt, bool enabled) {
 
 void atmosphereBegin() {
   theme = ATM_COLOUR;
+  colourway = 0;
   level = detectionLevel = driftClock = paletteClock = gridAge = 0;
   threshold = .75f;
   microphoneOn = false;
@@ -229,6 +234,12 @@ void atmosphereSetTheme(AtmosphereTheme value) {
   if (theme != value) { theme = value; rebuildGrid(); }
 }
 AtmosphereTheme atmosphereTheme() { return theme; }
+void atmosphereSetColourway(int value) {
+  if (!initialized) atmosphereBegin();
+  const uint8_t selected = value >= 0 && value < ATM_COLOURWAY_COUNT ? (uint8_t)value : 0;
+  if (colourway != selected) { colourway = selected; rebuildGrid(); }
+}
+uint8_t atmosphereColourway() { return colourway; }
 void atmosphereSetThreshold(float value) {
   if (!initialized) atmosphereBegin();
   threshold = isfinite(value) ? bounded(value, .35f, .95f) : .75f;

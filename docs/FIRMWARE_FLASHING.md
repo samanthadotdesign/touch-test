@@ -17,7 +17,7 @@ Connect the board with a USB data cable. To choose a port, run `./pio device lis
 
 The **[ESP32 firmware workflow](https://github.com/samanthadotdesign/touch-test/actions/workflows/firmware.yml)** runs on pushes to `main` and `codex/**` branches and can also be started with **Run workflow**. It checks the browser code and generated library, builds with PlatformIO on Ubuntu, and runs four native firmware suites before uploading an artifact.
 
-Open a successful run for the `main` commit you want and download **esp32s3-firmware** from its artifacts. Extract the download. It contains `firmware-merged.bin`, the individual bootloader/partition/application binaries, and `FLASHING.md`. Use the individual binaries for a normal update that keeps saved settings. The merged image is a convenient first-install image at address `0x0`, but its padded gaps overwrite saved theme and threshold settings.
+Open a successful run for the `main` commit you want and download **esp32s3-firmware** from its artifacts. Extract the download. It contains `firmware-merged.bin`, the individual bootloader/partition/application binaries, `FLASHING.md`, and `COLOURWAYS.md`. Use the individual binaries for a normal update that keeps saved settings. The merged image is a convenient first-install image at address `0x0`, but its padded gaps overwrite the saved threshold and last colourway.
 
 This Mac currently stops the downloaded ARM64 compiler with SIGKILL / PlatformIO Error −9. A successful GitHub build provides the binary without requiring that compiler to run locally. Workflow configuration alone does not establish a successful build: check the run status and commit before using its artifact.
 
@@ -51,11 +51,11 @@ For a first install, or when resetting saved settings is acceptable, the merged 
 .venv/bin/python -m esptool --chip esp32s3 --port /dev/cu.YOUR_DEVICE write_flash 0x0 /absolute/path/to/firmware-merged.bin
 ```
 
-Flashing this merged image overwrites saved theme and threshold settings even without `erase_flash`, because the image includes padding across that area. A different partition layout or an explicit full erase can also remove saved settings.
+Flashing this merged image overwrites the saved threshold and last colourway even without `erase_flash`, because the image includes padding across that area. A different partition layout or an explicit full erase can also remove saved settings.
 
 ## After updating
 
-Tap the display’s invisible bottom-right 44 × 44 corner. Try Night clouds, Paper clouds, and Colour fields; the sheet hides after six seconds. Enable the mic, then adjust the threshold with **− / +** if needed. A gentle blow spreads moving colour and text. A sustained strong blow reveals the poem; a new breath or tap starts the next animated poem. The microphone needs staged setup and a short warmup before responding.
+Every restart opens Colour fields with a different starting colourway from the previous boot. The colours come from [Palette 1–3 on the Figma source frame](COLOURWAYS.md). Tap the display’s invisible bottom-right 44 × 44 corner. Try Night clouds, Paper clouds, and Colour fields for the current session; the sheet hides after six seconds. Restarting returns to Colour fields. Enable the mic, then adjust the threshold with **− / +** if needed. A gentle blow spreads moving colour and text. A sustained strong blow reveals the poem; a new breath or tap starts the next animated poem. The microphone needs staged setup and a short warmup before responding.
 
 Check that Night is dark with white text and Paper is light with black text. The ES3C28P IPS panel needs the manufacturer's normal-colour inversion setting (`INVON`, `0x21`), applied directly to the screen even when drawing through the canvas. Earlier builds used the generic panel default, which can reverse dark/light themes and turn warm colours blue or cyan. The firmware now selects the IPS panel mode; palette values and RGB565 byte order stay the same. See the [manufacturer's initialization code](https://www.lcdwiki.com/res/ES3C28P/ILI9341V_Init.txt).
 

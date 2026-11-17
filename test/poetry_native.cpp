@@ -352,6 +352,8 @@ int main() {
 
   appBegin();
   assert(appState() == ST_MOVING);
+  assert(atmosphereTheme() == ATM_COLOUR && atmosphereColourway() < ATM_COLOURWAY_COUNT);
+  assert(Preferences::writesTo("poetry", "colourway") == 1); // missing key, first boot
   advance(10000);
   assert(appState() == ST_MOVING); // no automatic poem assembly
   fingerDown = true; advance(20);
@@ -399,8 +401,15 @@ int main() {
   advance(6100);
   assert(!appMenuVisible() && appState() == ST_READING);
   assert(testGfx.glyphs > themeGlyphsBefore);
-  appBegin(); // NVS preferences survive reboot; microphone never auto-starts.
-  assert(atmosphereTheme() == ATM_NIGHT);
+  Preferences oldSettings;
+  assert(oldSettings.begin("poetry", false));
+  oldSettings.putUChar("theme", ATM_NIGHT); // legacy firmware may have saved this
+  const uint8_t previousColourway = atmosphereColourway();
+  const size_t colourwayWritesBeforeBoot = Preferences::writesTo("poetry", "colourway");
+  appBegin(); // Threshold survives; every reboot starts a fresh colourful scene.
+  assert(atmosphereTheme() == ATM_COLOUR);
+  assert(atmosphereColourway() != previousColourway);
+  assert(Preferences::writesTo("poetry", "colourway") == colourwayWritesBeforeBoot + 1);
   assert(fabsf(atmosphereThreshold() - savedThreshold) < .001f);
   assert(!microphoneEnabled && appState() == ST_MOVING && !appMenuVisible());
 
@@ -464,5 +473,41 @@ int main() {
   assert(!microphoneEnabled && appMenuVisible() && appState() == ST_MOVING);
   advance(6100); assert(!appMenuVisible());
   advance(300); tap(); assert(appState() == ST_ASSEMBLING);
-  puts("PASS: layouts, motion, 20% fragment floor, breath fan/timing, hidden themes and mic/tap controls");
+
+  // A remembered colourway avoids adjacent repeats without persisting the
+  // session's Night/Paper choice or enabling the mic on the next boot.
+  microphoneAvailable = true;
+  appBegin();
+  uint8_t previousBootColourway = atmosphereColourway();
+  const float persistentThreshold = atmosphereThreshold();
+  for (int boot = 0; boot < 48; boot++) {
+    advance(300); tapAt(220, 300);
+    const AtmosphereTheme temporaryTheme = boot % 2 ? ATM_PAPER : ATM_NIGHT;
+    const size_t oldThemeWrites = Preferences::writesTo("poetry", "theme");
+    advance(300); tapAt(120, temporaryTheme == ATM_NIGHT ? 132 : 168);
+    assert(atmosphereTheme() == temporaryTheme);
+    assert(Preferences::writesTo("poetry", "theme") == oldThemeWrites);
+    advance(300); tapAt(60, 245);
+    assert(microphoneEnabled);
+    const size_t writesBeforeBoot = Preferences::writesTo("poetry", "colourway");
+    appBegin();
+    const uint8_t selected = atmosphereColourway();
+    assert(atmosphereTheme() == ATM_COLOUR && selected < ATM_COLOURWAY_COUNT);
+    assert(selected != previousBootColourway);
+    assert(oldSettings.getUChar("colourway", 255) == selected);
+    assert(Preferences::writesTo("poetry", "colourway") == writesBeforeBoot + 1);
+    assert(fabsf(atmosphereThreshold() - persistentThreshold) < .001f);
+    assert(!microphoneEnabled && !appMenuVisible() && appState() == ST_MOVING);
+    previousBootColourway = selected;
+  }
+  // Missing and malformed remembered indices start safely, then become valid.
+  for (uint8_t invalid : {(uint8_t)ATM_COLOURWAY_COUNT, (uint8_t)255}) {
+    oldSettings.putUChar("colourway", invalid);
+    const size_t writesBeforeBoot = Preferences::writesTo("poetry", "colourway");
+    appBegin();
+    assert(atmosphereColourway() < ATM_COLOURWAY_COUNT && atmosphereTheme() == ATM_COLOUR);
+    assert(Preferences::writesTo("poetry", "colourway") == writesBeforeBoot + 1);
+  }
+  oldSettings.end();
+  puts("PASS: layouts, motion, 20% fragment floor, breath/tap controls, and colourful reboot variation");
 }

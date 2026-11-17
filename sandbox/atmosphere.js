@@ -1,7 +1,8 @@
 /* Shared browser-only atmosphere, hidden theme sheet, and local microphone input. */
 (function (root) {
   'use strict';
-  const THEME_KEY = 'poetry-atmosphere-theme-v1';
+  const THEME_KEY = 'poetry-atmosphere-theme-v1'; // Legacy key; no longer read or written.
+  const COLOURWAY_KEY = 'poetry-atmosphere-colourway-v1';
   const THEMES = ['dark', 'light', 'colour'];
   const HIDE_DELAY = 6000;
   const clamp = (n, min, max) => Math.max(min, Math.min(max, n));
@@ -52,8 +53,16 @@
 
   function createController(screen, {onMicStart = () => {}, onBlow = () => false} = {}) {
     let theme = 'colour';
-    try { const saved = localStorage.getItem(THEME_KEY); if (THEMES.includes(saved)) theme = saved; } catch (_) {}
+    let previousColourway = -1;
+    try {
+      const saved = localStorage.getItem(COLOURWAY_KEY);
+      if (/^[0-2]$/.test(saved)) previousColourway = Number(saved);
+    } catch (_) {}
+    const colourways = [0, 1, 2].filter(value => value !== previousColourway);
+    const colourway = colourways[Math.floor(Math.random() * colourways.length)];
+    try { localStorage.setItem(COLOURWAY_KEY, String(colourway)); } catch (_) {}
     screen.dataset.theme = theme;
+    screen.dataset.colourway = String(colourway);
     screen.insertAdjacentHTML('beforeend', `
       <button type="button" class="atmosphere-hotspot" aria-label="Open atmosphere options" aria-haspopup="dialog" aria-expanded="false" aria-controls="atmosphere-options"></button>
       <div class="atmosphere-backdrop" hidden></div>
@@ -111,11 +120,10 @@
       screen.dataset.theme = theme;
       choices.forEach(choice => choice.setAttribute('aria-pressed', String(choice.dataset.theme === theme)));
     }
-    function setTheme(value, persist = true) {
+    function setTheme(value) {
       if (!THEMES.includes(value)) return;
       theme = value;
       syncTheme();
-      if (persist) { try { localStorage.setItem(THEME_KEY, theme); } catch (_) {} }
       armTimer();
     }
     choices.forEach(choice => choice.addEventListener('click', () => setTheme(choice.dataset.theme)));
@@ -133,9 +141,6 @@
         if (event.shiftKey && index <= 0) { event.preventDefault(); buttons.at(-1).focus(); }
         else if (!event.shiftKey && index === buttons.length - 1) { event.preventDefault(); buttons[0].focus(); }
       }
-    });
-    root.addEventListener('storage', event => {
-      if (event.key === THEME_KEY || event.key === null) setTheme(THEMES.includes(event.newValue) ? event.newValue : 'colour', false);
     });
 
     function syncMic() {
@@ -245,6 +250,7 @@
 
     return {
       get theme() { return theme; },
+      get colourway() { return colourway; },
       get level() { return level; },
       get blowForce() { return level; },
       get micActive() { return micState === 'on'; },
@@ -287,7 +293,7 @@
       }
     };
   }
-  const api = {createController, createBlowGate, levelFromSamples, smoothLevel, motionScale, THEME_KEY, HIDE_DELAY};
+  const api = {createController, createBlowGate, levelFromSamples, smoothLevel, motionScale, THEME_KEY, COLOURWAY_KEY, HIDE_DELAY};
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.PoetryAtmosphere = api;
 })(globalThis);

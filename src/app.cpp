@@ -54,7 +54,6 @@ void menuPress(int x, int y, uint32_t now) {
   for (int i = 0; i < 3; ++i) {
     if (inside(x, y, 12, 120 + i * 36, 216, 31)) {
       atmosphereSetTheme((AtmosphereTheme)i);
-      if (settingsReady) settings.putUChar("theme", (uint8_t)i);
       return;
     }
   }
@@ -137,10 +136,16 @@ void appBegin() {
   if (settingsReady) settings.end();
   settingsReady = settings.begin("poetry", false);
   if (settingsReady) {
-    const uint8_t theme = settings.getUChar("theme", ATM_COLOUR);
-    atmosphereSetTheme(theme <= ATM_COLOUR ? (AtmosphereTheme)theme : ATM_COLOUR);
     atmosphereSetThreshold(settings.getUChar("threshold", 75) / 100.f);
   }
+  // Every boot starts colourful. NVS remembers only the last colourway so
+  // consecutive boots differ; Night/Paper are temporary choices this session.
+  const uint8_t previousColourway = settingsReady
+      ? settings.getUChar("colourway", ATM_COLOURWAY_COUNT) : ATM_COLOURWAY_COUNT;
+  const int previous = previousColourway < ATM_COLOURWAY_COUNT ? previousColourway : -1;
+  atmosphereSetColourway(pickDifferent(ATM_COLOURWAY_COUNT, previous));
+  atmosphereSetTheme(ATM_COLOUR);
+  if (settingsReady) settings.putUChar("colourway", atmosphereColourway());
   menuOpen = wasDown = false;
   lettersSetResponse(1, 0);
   nextPoem(true);

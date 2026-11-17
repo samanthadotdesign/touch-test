@@ -13,9 +13,11 @@ and runs these production-code suites:
 
 - poetry_native.cpp: app state, touch gating, reading layouts, word motion,
   perspective, 0.66x-1.1x fragment scale, breath response, hidden theme menu,
-  and saved settings.
+  saved thresholds, and 48 simulated colourful restarts without consecutive
+  colourway repeats.
 - atmosphere_native.cpp: independent colour fields, three themes, grain,
-  readable ink, smoothed sound response, and one navigation per strong breath.
+  readable ink, three distinct starting colourways, preserved animation phases,
+  smoothed sound response, and one navigation per strong breath.
 - audio_input_native.cpp: the ES8311 module with simulated I2C and I2S. It
   checks staged startup, discarded warmup spikes, normalized RMS, either active
   slot, bounded zero-timeout DMA reads, stale input, stop/cancel/re-enable,

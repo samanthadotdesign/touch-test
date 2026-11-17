@@ -7,6 +7,7 @@ enum AtmosphereTheme : uint8_t {
   ATM_PAPER,
   ATM_COLOUR
 };
+constexpr uint8_t ATM_COLOURWAY_COUNT = 3;
 
 void atmosphereBegin();
 
@@ -21,6 +22,10 @@ float atmosphereBlowForce();
 
 void atmosphereSetTheme(AtmosphereTheme theme);
 AtmosphereTheme atmosphereTheme();
+// Offset the three authored colour palettes without resetting their clocks.
+// Invalid indices select colourway zero.
+void atmosphereSetColourway(int colourway);
+uint8_t atmosphereColourway();
 void atmosphereSetThreshold(float threshold);
 float atmosphereThreshold();
 

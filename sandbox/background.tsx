@@ -7,6 +7,8 @@ import {setup, render, manifest} from './lib/drifting-colour-fields';
 const gradient = (stops: [number, number, number, number][]) => ({
   stops: stops.map(([position, r, g, b]) => ({position, color: {r, g, b, a: 1}}))
 });
+// Figma source: https://www.figma.com/design/nVvkRzyAbBU2QTXQGdhttv/motion?node-id=33-31
+// Palette 1-3 are active; Palette 4 is retained below but is not in the cycle.
 const colour = {
   palette: gradient([[0, .96, .93, .83], [.32, .88, .8, .44], [.65, .64, .43, .57], [1, .65, .78, .87]]),
   palette2: gradient([[0, .88, .39, .37], [.5, .72, .61, .81], [1, .98, .9, .68]]),
@@ -22,6 +24,16 @@ const themes = {
 // One stable shader object keeps GPU state and integrated phases when volume changes.
 function mount(host: HTMLElement, controls: any) {
   let painted = false, previousTime: number | undefined, clock = 0;
+  const colourway = Number.isInteger(controls.colourway) && controls.colourway >= 0 && controls.colourway < 3
+    ? controls.colourway : 0;
+  const palettes = [colour.palette, colour.palette2, colour.palette3];
+  // Rotate the three active Figma palettes by a whole step. Their stops and the
+  // shader's independent per-blob transition phases stay unchanged.
+  const selectedThemes = {...themes, colour: {...themes.colour,
+    palette: palettes[colourway],
+    palette2: palettes[(colourway + 1) % 3],
+    palette3: palettes[(colourway + 2) % 3]
+  }};
   const params = {blobCount: 7, softness: .72, intensity: 1, blobSize: 65,
     colourSpeed: 0, seed: 12, grainAmount: .16, grainSize: .8, motionSpeed: .18, paletteTransitionSpeed: .6};
   const shader: Shader = {
@@ -31,7 +43,7 @@ function mount(host: HTMLElement, controls: any) {
       previousTime = frame.time;
       if (!document.hidden) clock += dt;
       render(device, {...frame, time: clock, params: {...params,
-        ...themes[controls.theme as keyof typeof themes],
+        ...selectedThemes[controls.theme as keyof typeof selectedThemes],
         motionSpeed: .18 * controls.motionScale,
         blowForce: controls.blowForce
       }});

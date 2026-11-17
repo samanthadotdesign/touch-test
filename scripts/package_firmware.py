@@ -28,7 +28,7 @@ def package_firmware(source, target, env):
     (destination / "FLASHING.md").write_text(
         "# ESP32-S3 LCDwiki ES3C28P firmware\n\n"
         "For an existing installation of this project with its 16 MB partition layout, "
-        "update only firmware.bin at 0x10000. This keeps saved theme/threshold settings.\n\n"
+        "update only firmware.bin at 0x10000. This keeps the saved threshold and last colourway.\n\n"
         "Connect the board with a USB data cable, then run in a Python environment:\n\n"
         "```sh\npython -m pip install esptool==4.9.0\n"
         "python -m esptool --chip esp32s3 --port /dev/cu.YOUR_DEVICE "
@@ -41,14 +41,17 @@ def package_firmware(source, target, env):
         "0x0 bootloader.bin 0x8000 partitions.bin 0xe000 boot_app0.bin "
         "0x10000 firmware.bin\n```\n\n"
         "firmware-merged.bin is an alternative complete image at 0x0. Flashing it "
-        "also writes its padded gaps and RESETS saved theme/threshold settings. "
+        "also writes its padded gaps and RESETS the saved threshold and last colourway. "
         "It is intended for first installation or an intentional settings reset.\n\n"
         "Tap the invisible bottom-right 44 x 44 corner for themes, microphone, "
-        "and blow threshold. The menu closes after six seconds. Mic starts off. "
+        "and blow threshold. The menu closes after six seconds. Every restart opens "
+        "Colour fields with a different starting colourway; Night/Paper last for "
+        "the current session. See COLOURWAYS.md for the Figma palette source. Mic starts off. "
         "Enable it, blow gently to spread the scene, or hold a strong blow to reveal "
         "the poem. Release before another blow advances to the next moving poem.\n",
         encoding="utf-8")
     project = Path(env.subst("$PROJECT_DIR"))
+    shutil.copy2(project / "docs" / "COLOURWAYS.md", destination / "COLOURWAYS.md")
     for name in ("LICENSE", "NOTICE"):
         shutil.copy2(project / "third_party" / "es8311" / name,
                      destination / ("ES8311-" + name))

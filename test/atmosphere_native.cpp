@@ -5,6 +5,8 @@
 #include <assert.h>
 #include <math.h>
 #include <stdio.h>
+#include <limits.h>
+#include <vector>
 
 namespace {
 struct GuardedFrame {
@@ -116,6 +118,54 @@ void smoothMovement() {
   assert(isfinite(atmosphereLevel()) && isfinite(atmosphereMotionScale()));
 }
 
+void colourwayVariation() {
+  std::vector<uint16_t> colourways[ATM_COLOURWAY_COUNT];
+  for (int way = 0; way < ATM_COLOURWAY_COUNT; way++) {
+    atmosphereBegin();
+    atmosphereSetColourway(way);
+    assert(atmosphereTheme() == ATM_COLOUR && atmosphereColourway() == way);
+    colourways[way].resize(LCD_W * LCD_H);
+    for (int y = 0; y < LCD_H; y++) for (int x = 0; x < LCD_W; x++)
+      colourways[way][y * LCD_W + x] = atmospherePixel(x, y);
+    // Repeating a boot + chosen offset reproduces the same complete image.
+    atmosphereBegin();
+    atmosphereSetColourway(way);
+    for (int y = 0; y < LCD_H; y++) for (int x = 0; x < LCD_W; x++)
+      assert(colourways[way][y * LCD_W + x] == atmospherePixel(x, y));
+  }
+  for (int first = 0; first < ATM_COLOURWAY_COUNT; first++) {
+    for (int second = first + 1; second < ATM_COLOURWAY_COUNT; second++) {
+      int changed = 0;
+      for (int i = 0; i < LCD_W * LCD_H; i++)
+        changed += colourways[first][i] != colourways[second][i];
+      assert(changed > LCD_W * LCD_H / 4);
+    }
+  }
+  for (int invalid : {-1, (int)ATM_COLOURWAY_COUNT, 255, INT_MAX, INT_MIN}) {
+    atmosphereBegin();
+    atmosphereSetColourway(2);
+    atmosphereSetColourway(invalid);
+    assert(atmosphereColourway() == 0);
+    for (int y = 0; y < LCD_H; y++) for (int x = 0; x < LCD_W; x++)
+      assert(colourways[0][y * LCD_W + x] == atmospherePixel(x, y));
+  }
+  // A colourway is an additive palette offset, not a reset or speed change.
+  atmosphereBegin();
+  update(300, 0, false);
+  capture();
+  atmosphereSetColourway(1);
+  atmosphereSetColourway(2);
+  atmosphereSetColourway(0);
+  assert(differences() == 0);
+  for (int monochrome = ATM_NIGHT; monochrome <= ATM_PAPER; monochrome++) {
+    atmosphereSetTheme((AtmosphereTheme)monochrome);
+    capture();
+    atmosphereSetColourway(1);
+    atmosphereSetColourway(2);
+    assert(differences() == 0);
+  }
+}
+
 void oneEventPerBreath() {
   atmosphereBegin();
   const int frames = untilBlow();
@@ -166,7 +216,8 @@ uint16_t *displayFramebuffer() { return useFrame ? frame.pixels : nullptr; }
 int main() {
   drawingAndThemes();
   smoothMovement();
+  colourwayVariation();
   oneEventPerBreath();
   menuAndThreshold();
-  puts("Native atmosphere checks passed (CPU background, themes, pressure, breath gate)");
+  puts("Native atmosphere checks passed (CPU background, colourways, themes, pressure, breath gate)");
 }

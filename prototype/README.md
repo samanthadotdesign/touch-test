@@ -28,7 +28,7 @@ it does not emulate ESP32 hardware timing or touch electronics.
 When served on the same origin, the prototype reads the studio's saved poetry
 and animation library. Saving a poem or style in another open studio tab also
 reloads the prototype's library and starts a fresh moving scene. Unsaved slider
-changes remain a studio preview. The prototype never writes to the saved poetry library. It saves the atmosphere preference under a separate browser storage entry.
+changes remain a studio preview. The prototype never writes to the saved poetry library. It saves the last starting colourway under a separate browser storage entry. Each reload opens Colour fields with a different starting colourway; Night/Paper choices last for the current session.
 For direct `file://` use, browser storage sharing depends on the browser; use
 the local server for reliable sharing.
 
