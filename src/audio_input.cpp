@@ -44,8 +44,8 @@ constexpr uint32_t kStaleMs = 100;
 constexpr size_t kFramesPerBuffer = 128;
 constexpr size_t kDmaBuffers = 8;
 constexpr size_t kRegisterBudget = 4;
-constexpr float kNoiseFloor = .003f;
-constexpr float kLevelGain = 18.f;
+constexpr float kNoiseFloor = .0015f;
+constexpr float kLevelGain = 30.f;
 
 struct RegisterValue { uint8_t reg, value; };
 

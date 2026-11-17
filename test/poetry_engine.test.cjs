@@ -31,8 +31,8 @@ test('poem changes overlap in one 3D field and preserve incoming motion time',()
  for(let i=0;i<64;i++){e.step(.01);layers=e.layers();assert.equal(layers.length,2);close(layers[0].opacity+layers[1].opacity,1);assert.ok(layers[0].opacity>0&&layers[1].opacity>0);assert.ok(layers.every(l=>l.poses.length>0));}
  const incoming=e.next;e.step(.01);assert.equal(e.mode,'MOVING');assert.equal(e.poem.id,incoming.poem.id);close(e.time,.65);assert.deepEqual(e.poses(),e.moving(incoming));
 });
-test('responsive motion changes accumulated scene time without changing transition durations',()=>{
- for(const scale of [0,2,5]){
+test('responsive motion reaches nine times scene speed without changing real transition durations',()=>{
+ for(const scale of [0,2,5,9]){
   const e=new Experience(clone(),()=>.3);e.step(.1);close(e.time,.1);
   e.step(.1,scale);close(e.time,.1+.1*scale);
   e.touch();for(let i=0;i<54;i++)e.step(.01,scale);assert.equal(e.mode,'ASSEMBLING');
@@ -45,7 +45,7 @@ test('responsive motion changes accumulated scene time without changing transiti
 });
 test('responsive motion clamps excessive and negative scale and ignores nonfinite scale',()=>{
  const e=new Experience(clone(),()=>.3);
- for(const [scale,expected] of [[-2,0],[12,.5],[NaN,.1],[Infinity,.1],[-Infinity,.1]]){
+ for(const [scale,expected] of [[-2,0],[12,.9],[NaN,.1],[Infinity,.1],[-Infinity,.1]]){
   const before=e.time;e.step(.1,scale);close(e.time-before,expected);
  }
  const before=e.time;e.step(.1,0);e.step(.1,2);close(e.time,before+.2);
@@ -215,4 +215,75 @@ test('long verse tightens spacing while preserving blank lines and author cleara
  }
  assert.doesNotThrow(()=>layout(Array(22).fill('word').join('\n')));
  assert.throws(()=>layout(Array(23).fill('word').join('\n')));
+});
+
+test('all twelve layouts keep fixed optional work-title and author footer anchors',()=>{
+ const text='First light moves\nAcross the quiet room\nA little slowly\nBefore the day begins';
+ const longTitle='A'.repeat(20)+' '+'B'.repeat(20)+' '+'C'.repeat(18);
+ for(const mode of LAYOUTS)for(const title of ['', 'Actual Work Title',longTitle]){
+  const a=layout(text,mode,title),untitled=layout(text,mode);
+  assert.equal(a.authorY,295,mode);assert.equal(a.footerTop,a.titleLines.length?a.titleY:295);
+  assert.equal(a.titleLines.length,title===longTitle?3:title?1:0);
+  if(title)assert.equal(a.titleY+(a.titleLines.length-1)*14,281);
+  assert.ok(a.titleLines.every(line=>line.length<=36));
+  assert.equal(a.titleLines.join('').replace(/\s/g,''),title.replace(/\s/g,''));
+  assert.deepEqual(a.words.map(w=>w.x),untitled.words.map(w=>w.x),`${mode} retains horizontal composition`);
+  assert.equal(a.letters.map(letter=>letter.text).join(''),text.replace(/\s/g,''));
+  for(const word of a.words){assert.ok(word.y+160-4>=4-1e-8,`${mode} top`);assert.ok(word.y+160+4<=a.footerTop-16+1e-8,`${mode} footer collision`);assert.equal(word.size,1);}
+ }
+ const short=layout('one\ntwo\nthree','centered');
+ assert.deepEqual(layout('one\ntwo\nthree','centered','A title').words,short.words,'short clear bodies keep their original positions');
+ assert.deepEqual(layout('body','centered','   ').titleLines,[]);
+ assert.deepEqual(layout('body','centered','x'.repeat(60)).titleLines,['x'.repeat(36),'x'.repeat(24)]);
+ assert.deepEqual(layout('body','centered','a'.repeat(22)+' '+'b'.repeat(37)).titleLines,['a'.repeat(22),'b'.repeat(36),'b']);
+});
+test('three-line work titles fit legacy22-line verse without losing characters or increasing capacity',()=>{
+ const title='A'.repeat(20)+' '+'B'.repeat(20)+' '+'C'.repeat(18),text=Array(22).fill('word').join('\n');
+ for(const mode of ['centered','left','stepped','stepped-reverse','stepped-zigzag']){
+  const a=layout(text,mode,title);assert.equal(a.titleY,253);assert.equal(a.authorY,295);
+  assert.equal(a.words.length,22);assert.equal(a.letters.map(letter=>letter.text).join(''),'word'.repeat(22));
+  close(a.words[0].y+160-4,4);close(a.words.at(-1).y+160+4,237);
+  for(let i=1;i<a.words.length;i++)assert.ok(a.words[i].y-a.words[i-1].y>=10);
+  assert.throws(()=>layout(Array(23).fill('word').join('\n'),mode,title));
+ }
+ const spatial=Array(12).fill('a b c').join('\n'),before=layout(spatial,'constellation'),after=layout(spatial,'constellation',title);
+ const beforeMin=Math.min(...before.words.map(w=>w.y)),beforeSpan=Math.max(...before.words.map(w=>w.y))-beforeMin;
+ const afterMin=Math.min(...after.words.map(w=>w.y)),afterSpan=Math.max(...after.words.map(w=>w.y))-afterMin;
+ close(afterSpan,225);assert.ok(beforeSpan>afterSpan);
+ before.words.forEach((word,index)=>{assert.equal(after.words[index].x,word.x);close((after.words[index].y-afterMin)/afterSpan,(word.y-beforeMin)/beforeSpan);});
+});
+test('workTitle stays separate from the library label and is validated without losing source punctuation',()=>{
+ const data=clone();data.poems=[{...data.poems[0],title:'Private library label'}];delete data.poems[0].workTitle;
+ validateLibrary(data);assert.equal(data.poems[0].workTitle,'');
+ const untitled=new Experience(data,()=>0);assert.deepEqual(untitled.arrangement.titleLines,[]);
+ const workTitle='The “Actual” Work';data.poems[0].workTitle=workTitle;
+ const copy=validateLibrary(JSON.parse(JSON.stringify(data)));assert.equal(copy.poems[0].title,'Private library label');assert.equal(copy.poems[0].workTitle,workTitle);
+ const titled=new Experience(copy,()=>0);assert.deepEqual(titled.arrangement.titleLines,['The "Actual" Work']);
+ titled.previewLayout('random');assert.deepEqual(titled.arrangement.titleLines,['The "Actual" Work']);
+ for(const invalid of [null,5,[], 'Unsupported 🌙', 'a'.repeat(61)]){
+  const candidate=clone();candidate.poems[0].workTitle=invalid;assert.throws(()=>validateLibrary(candidate));
+ }
+});
+test('the bitmap renderer centres the actual work title at281 and author at295 with40percent theme ink',()=>{
+ const vm=require('node:vm'),environment={PoetryEngine:require('../sandbox/engine.js'),module:{exports:{}}};
+ vm.runInNewContext(fs.readFileSync(require('node:path').join(__dirname,'../sandbox/display.js'),'utf8'),environment);
+ const font=require('../data/font5x7.json').glyphs,draws=[],ctx={};
+ for(const name of ['clearRect','beginPath','lineTo','moveTo','closePath','fill'])ctx[name]=()=>{};
+ ctx.fillRect=(x,y,w,h)=>draws.push({x,y,w,h,style:ctx.fillStyle});
+ const expectedPixels=lines=>{
+  const pixels=new Set();for(const [text,y] of lines){const x=(240-text.length*6)/2;for(let c=0;c<text.length;c++)for(let col=0;col<5;col++)for(let row=0;row<8;row++)if(font[text.charCodeAt(c)-32][col]&(1<<row))pixels.add(Math.trunc(x+c*6+col)+','+Math.trunc(y+row));}return pixels;
+ };
+ const pixelsFor=style=>{const pixels=new Set();for(const draw of draws.filter(draw=>draw.style===style))for(let x=draw.x;x<draw.x+draw.w;x++)for(let y=draw.y;y<draw.y+draw.h;y++)pixels.add(x+','+y);return pixels;};
+ const longTitle='A'.repeat(20)+' '+'B'.repeat(20)+' '+'C'.repeat(18);
+ for(const theme of ['dark','light','colour'])for(const title of ['', 'Actual Work',longTitle]){
+  const data=clone();data.poems=[{...data.poems[0],title:'Hidden label',workTitle:title,by:'Reader'}];
+  const e=new Experience(data,()=>0),render=environment.module.exports.createRenderer({getContext:()=>ctx},font,{transparent:true,getTheme:()=>theme});
+  draws.length=0;render(e);assert.equal(draws.length,0,'moving fragments have no footer');
+  e.touch();advance(e,.6);draws.length=0;render(e);
+  const ink=theme==='dark'?'255,255,255':'0,0,0',lines=e.arrangement.titleLines.map((text,index)=>[text,e.arrangement.titleY+index*14]);lines.push(['Reader',295]);
+  assert.deepEqual(pixelsFor(`rgba(${ink},0.4)`),expectedPixels(lines));
+  if(!title)assert.ok(draws.filter(draw=>draw.style===`rgba(${ink},0.4)`).every(draw=>draw.y>=295),'empty actual work title has no placeholder');
+  e.touch();advance(e,.2);draws.length=0;render(e);
+  const opacity=.4*(1-e.layers()[0].progress);assert.deepEqual(pixelsFor(`rgba(${ink},${opacity})`),expectedPixels(lines));
+ }
 });

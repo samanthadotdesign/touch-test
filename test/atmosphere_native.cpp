@@ -103,11 +103,11 @@ void smoothMovement() {
   capture();
   atmosphereUpdate(.01f, 1, true);
   const float first = atmosphereLevel();
-  assert(first > 0 && first < .2f);
-  assert(atmosphereMotionScale() > 1.25f && atmosphereMotionScale() < 2);
+  assert(fabsf(first - (1 - expf(-.01f / .018f))) < .0001f);
+  assert(atmosphereMotionScale() > 6 && atmosphereMotionScale() < 7);
   update(100, 1);
   assert(atmosphereLevel() > .99f && atmosphereBlowForce() > .99f);
-  assert(atmosphereMotionScale() > 4.99f && atmosphereMotionScale() <= 5);
+  assert(atmosphereMotionScale() > 8.99f && atmosphereMotionScale() <= 9);
   assert(differences() > LCD_W * LCD_H / 5);
   atmosphereUpdate(.01f, 0, false);
   assert(atmosphereLevel() > .9f);  // Release eases rather than snapping the blobs back.
@@ -116,6 +116,22 @@ void smoothMovement() {
   atmosphereUpdate(NAN, NAN, true);
   atmosphereUpdate(INFINITY, INFINITY, true);
   assert(isfinite(atmosphereLevel()) && isfinite(atmosphereMotionScale()));
+}
+
+void reactiveGridCadence() {
+  atmosphereBegin(); capture();
+  atmosphereUpdate(.09f, 0, false);
+  assert(differences() == 0); // Quiet drift refreshes at 10Hz.
+  atmosphereUpdate(.01f, 0, false);
+  assert(differences() > 0);
+  atmosphereBegin(); capture();
+  atmosphereUpdate(.04f, .05f, true);
+  assert(differences() == 0);
+  atmosphereUpdate(.01f, .05f, true);
+  assert(differences() > 0); // Sound reaches the cached CPU field within 50ms.
+  capture();
+  atmosphereUpdate(.05f, 0, false);
+  assert(differences() > 0); // Releasing the mic retains 20Hz while motion eases.
 }
 
 void colourwayVariation() {
@@ -169,7 +185,7 @@ void colourwayVariation() {
 void oneEventPerBreath() {
   atmosphereBegin();
   const int frames = untilBlow();
-  assert(frames >= 12 && frames <= 30);
+  assert(frames >= 6 && frames <= 15);
   assert(!atmosphereTakeBlow());
   assert(update(1000, 1) == 0);  // A held blow never skips ahead again.
   assert(update(10, 0) == 0);
@@ -190,7 +206,7 @@ void menuAndThreshold() {
   atmosphereBegin();
   assert(update(300, 1, true, false) == 0);
   assert(atmosphereLevel() > .99f);  // The menu suppresses advancement, not pressure.
-  assert(update(11, 1) == 0);
+  assert(update(5, 1) == 0);
   assert(update(1, 1) == 1);
   atmosphereUpdate(.01f, 1, false);
   assert(!atmosphereTakeBlow());
@@ -201,48 +217,50 @@ void menuAndThreshold() {
   atmosphereSetThreshold(-10);
   assert(atmosphereThreshold() == .05f);
   atmosphereSetThreshold(NAN);
-  assert(atmosphereThreshold() == .25f);
+  assert(atmosphereThreshold() == .10f);
   atmosphereBegin();
-  assert(update(10, 1) == 0);
+  assert(update(4, 1) == 0);
   atmosphereSetThreshold(.9f);
-  assert(update(11, 1) == 0);
+  assert(update(5, 1) == 0);
   assert(update(1, 1) == 1);
 }
 
 void gentleBreathsAndSpikes() {
   atmosphereBegin();
-  assert(atmosphereThreshold() == .25f);
-  assert(update(200, .1f) == 0);
-  assert(atmosphereBlowForce() > .09f); // gentle movement below navigation strength
+  assert(atmosphereThreshold() == .10f);
+  assert(update(200, .05f) == 0);
+  assert(fabsf(atmosphereLevel() - .05f) < .0001f); // the meter remains linear
+  assert(fabsf(atmosphereBlowForce() - sqrtf(.05f)) < .0001f);
+  assert(atmosphereMotionScale() > 2.98f && atmosphereMotionScale() < 3);
 
-  for (float gentle : {.306f, .35f}) {
+  for (float gentle : {.135f, .2f}) {
     atmosphereBegin();
     int elapsed = 0;
-    for (; elapsed < 30; elapsed++) if (update(1, gentle)) break;
-    assert(elapsed >= 11 && elapsed < 30); // gentle breath responds in under .3s
+    for (; elapsed < 15; elapsed++) if (update(1, gentle)) break;
+    assert(elapsed >= 5 && elapsed < 15); // light breath responds in under .15s
     assert(update(300, gentle) == 0); // sustained gentle breath still triggers once
     assert(update(20, 0) == 0);
     assert(update(100, gentle) == 0); // quiet period is shorter than the .5s rearm
     assert(update(200, 0) == 0);
-    assert(update(30, gentle) == 1);
+    assert(update(15, gentle) == 1);
   }
 
   // A full-scale click/handling spike never finishes from a smoothed tail.
-  for (int spikeFrames : {1, 5, 11}) {
+  for (int spikeFrames : {1, 5}) {
     atmosphereBegin();
     assert(update(spikeFrames, 1) == 0);
     assert(update(300, 0) == 0);
   }
   atmosphereBegin();
-  atmosphereUpdate(.1f, 1, true);
+  atmosphereUpdate(.05f, 1, true);
   assert(!atmosphereTakeBlow());
-  atmosphereUpdate(.1f, 0, true);
+  atmosphereUpdate(.05f, 0, true);
   assert(!atmosphereTakeBlow());
 
   atmosphereBegin();
   atmosphereSetThreshold(.05f);
   assert(update(200, .04f) == 0);
-  assert(update(30, .1f) == 1); // the menu can tune navigation to a lighter breath
+  assert(update(15, .075f) == 1); // the menu can tune navigation to a lighter breath
 }
 }  // namespace
 
@@ -252,6 +270,7 @@ uint16_t *displayFramebuffer() { return useFrame ? frame.pixels : nullptr; }
 int main() {
   drawingAndThemes();
   smoothMovement();
+  reactiveGridCadence();
   colourwayVariation();
   oneEventPerBreath();
   menuAndThreshold();

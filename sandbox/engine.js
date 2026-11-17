@@ -20,14 +20,26 @@
     const aliases={"\u2018":"'","\u2019":"'","\u201a":"'","\u201b":"'","\u201c":'"',"\u201d":'"',"\u201e":'"',"\u201f":'"',"\u2010":"-","\u2011":"-","\u2012":"-","\u2013":"-","\u2014":"-","\u2212":"-","\u00a0":" ","\u202f":" ","\u2026":"..."};
     return value.replace(/[\u2018-\u201f\u2010-\u2014\u2212\u00a0\u202f\u2026]/g,c=>aliases[c]);
   }
-  function layout(text,readingLayout='centered') {
+  function layout(text,readingLayout='centered',title='') {
     text=displayText(text);
     if(readingLayout==='random'){
-      for(const candidate of LAYOUTS){try{return layout(text,candidate);}catch(error){/* try another composition */}}
+      for(const candidate of LAYOUTS){try{return layout(text,candidate,title);}catch(error){/* try another composition */}}
       throw Error('This poem does not fit any reading layout.');
     }
     if(!LAYOUTS.includes(readingLayout))throw Error('Choose a supported reading layout.');
     if(text.length>512||text.trim().split(/\s+/).length>96)throw Error('This poem exceeds the display text limit.');
+    title=displayText(title);
+    if(title.length>60)throw Error('Titles allow 60 characters.');
+    const titleLines=[];
+    let titleLine='';
+    for(let word of title.trim().split(/\s+/).filter(Boolean)){
+      while(word.length>36){if(titleLine){titleLines.push(titleLine);titleLine='';}titleLines.push(word.slice(0,36));word=word.slice(36);}
+      if(titleLine&&titleLine.length+1+word.length>36){titleLines.push(titleLine);titleLine='';}
+      titleLine+=(titleLine?' ':'')+word;
+    }
+    if(titleLine)titleLines.push(titleLine);
+    const authorY=295,titleY=281-Math.max(0,titleLines.length-1)*14;
+    const footerTop=titleLines.length?titleY:authorY,bodyTop=4,bodyBottom=footerTop-16;
     const size=1,advance=6,lines=[[]];let width=0,sourceOffset=0;
     for(const [index,paragraph] of text.split('\n').entries()) {
       if(index){lines.push([]);width=0;}
@@ -44,13 +56,12 @@
     const words=[];lines.forEach((line,i)=>line.forEach(word=>words.push({...word,size,line:i})));
     const n=words.length,l=lines.length;if(l>97)throw Error('This poem has too many line breaks.');if(!n)throw Error('A poem needs some words.');
     const fail=()=>{throw Error('This poem does not fit this composition. Choose Random for a layout that fits.');};
-    let authorY=296;
     if(['centered','left','stepped','stepped-reverse','stepped-zigzag'].includes(readingLayout)){
       const indent=i=>readingLayout==='stepped'?i*8:readingLayout==='stepped-reverse'?(l-1-i)*8:readingLayout==='stepped-zigzag'?(i%4<=2?i%4:4-i%4)*12:0;
       const groupWidth=Math.max(...widths.map((w,i)=>w+indent(i)));
       const pitch=l>1?Math.max(12,Math.min(14,Math.floor(252/(l-1)))):14;
       const bodyH=(l-1)*pitch+8,totalH=bodyH+28;if(totalH>288||groupWidth>216)fail();
-      const top=(320-totalH)/2;authorY=top+bodyH+20;
+      const top=(320-totalH)/2;
       for(const word of words){const i=word.line,left=readingLayout==='centered'?(240-widths[i])/2:(240-groupWidth)/2+indent(i);word.x=left+word.offset+word.width/2;word.y=top+i*pitch+4;}
     }else if(readingLayout==='constellation'){
       const rows=Math.ceil(n/3),cw=[0,0,0];words.forEach((w,i)=>cw[i%3]=Math.max(cw[i%3],w.width));const totalW=cw.reduce((a,b)=>a+b,0)+36;if(rows>12||totalW>216)fail();
@@ -73,9 +84,18 @@
       const half=Math.ceil(n/2);if(half>17||n-half<1)fail();const left=Math.max(...words.slice(0,half).map(w=>w.width)),right=Math.max(...words.slice(half).map(w=>w.width)),total=left+24+right;if(total>216)fail();const h=(half-1)*14+8,top=(280-h)/2+8;
       words.forEach((w,i)=>{w.x=(240-total)/2+(i<half?left/2:left+24+right/2);w.y=top+(i%half)*14+4;});
     }
+    // Preserve every composition and its eligibility. Only a footer collision moves the body;
+    // reduce centre spacing when a simple shift cannot fit the available height.
+    {
+      const minimum=Math.min(...words.map(word=>word.y)),maximum=Math.max(...words.map(word=>word.y));
+      const span=maximum-minimum,available=bodyBottom-bodyTop-8;
+      if(span>available)for(const word of words)word.y=minimum+(word.y-minimum)*available/span;
+      const fittedMaximum=minimum+Math.min(span,available),shift=clamp(0,bodyTop+4-minimum,bodyBottom-4-fittedMaximum);
+      for(const word of words)word.y+=shift;
+    }
     const letters=[];
     for(const word of words){word.x-=120;word.y-=160;for(let c=0;c<word.text.length;c++)letters.push({text:word.text[c],size,width:6,x:word.x-word.width/2+c*6+3,y:word.y,line:word.line,sourceOffset:word.sourceOffset+c});}
-    return {words,letters,authorY,size,layoutName:readingLayout,text};
+    return {words,letters,authorY,titleLines,titleY,footerTop,bodyBottom,size,layoutName:readingLayout,text};
   }
   function particleRandom(seed,index,channel){
     let x=(seed^Math.imul(index+1,0x9e3779b9)^Math.imul(channel+1,0x85ebca6b))>>>0;
@@ -123,8 +143,10 @@
       for(const key of ['id','text','by'])if(typeof p[key]!=='string'||!p[key].trim())throw Error(`Poem ${p.id}: ${key} is required.`);
       if(!/^[\x20-\x7e\n]+$/.test(displayText(p.text))||!/^[\x20-\x7e]+$/.test(displayText(p.by)))throw Error('The device font cannot render one of these characters. Smart quotes and dashes are supported.');
       if(typeof p.title!=='string'||! /^[\x20-\x7e]*$/.test(displayText(p.title)))throw Error('Title must use supported text or be empty.');
+      if(p.workTitle===undefined)p.workTitle='';
+      if(typeof p.workTitle!=='string'||! /^[\x20-\x7e]*$/.test(displayText(p.workTitle))||displayText(p.workTitle).length>60)throw Error('Work title must use supported text, at most 60 characters, or be empty.');
       if(displayText(p.text).length>512||displayText(p.text).trim().split(/\s+/).length>96||displayText(p.by).length>35||displayText(p.title).length>60)throw Error('Poems allow 512 characters / 96 words, titles 60 characters, and authors 35 characters.');
-      if(p.layout===undefined)p.layout='random';layout(p.text,p.layout);
+      if(p.layout===undefined)p.layout='random';layout(p.text,p.layout,p.workTitle);
     }
     for(const a of data.animations){if(typeof a.name!=='string'||!a.name.trim()||a.name.length>60||!/^[\x20-\x7e]+$/.test(a.name))throw Error('Animation names need 1–60 simple Latin letters or punctuation.');
       if(!Number.isInteger(a.kind)||a.kind<0||a.kind>7)throw Error('Animation kind must be 0–7.');
@@ -195,7 +217,7 @@
   class Experience {
     constructor(library,random=Math.random){this.library=validateLibrary(library);this.random=random;this.blowForce=0;this.poemIndex=-1;this.animationIndex=-1;this.pick();}
     different(count,last){if(count<2)return 0;if(last<0)return Math.floor(this.random()*count);const n=Math.floor(this.random()*(count-1));return n>=last?n+1:n;}
-    chooseLayout(poem){if(poem.layout!=='random')return layout(poem.text,poem.layout);const eligible=LAYOUTS.flatMap(name=>{try{return[layout(poem.text,name)];}catch(error){return[];}});const choices=eligible.length>1?eligible.filter(a=>a.layoutName!==this.arrangement?.layoutName):eligible;return choices[Math.floor(this.random()*choices.length)];}
+    chooseLayout(poem){if(poem.layout!=='random')return layout(poem.text,poem.layout,poem.workTitle||'');const eligible=LAYOUTS.flatMap(name=>{try{return[layout(poem.text,name,poem.workTitle||'')];}catch(error){return[];}});const choices=eligible.length>1?eligible.filter(a=>a.layoutName!==this.arrangement?.layoutName):eligible;return choices[Math.floor(this.random()*choices.length)];}
     makeScene(poemIndex,animationIndex){const poem=this.library.poems[poemIndex],motion={...this.library.animations[animationIndex]};return{poemIndex,animationIndex,poem,motion,arrangement:this.chooseLayout(poem),time:0,seed:Math.floor(this.random()*4294967296)>>>0};}
     adopt(scene){this.poemIndex=scene.poemIndex;this.animationIndex=scene.animationIndex;this.poem=scene.poem;this.motion=scene.motion;this.arrangement=scene.arrangement;this.time=scene.time;this.seed=scene.seed;this.mode='MOVING';this.age=0;this.next=null;this.cycle=(this.cycle||0)+1;}
     pick(){this.adopt(this.makeScene(this.different(this.library.poems.length,this.poemIndex),this.different(this.library.animations.length,this.animationIndex)));}
@@ -239,7 +261,7 @@
       if(this.mode==='MOVING'){this.mode='ASSEMBLING';this.age=0;return true;}
       this.next=this.makeScene(this.different(this.library.poems.length,this.poemIndex),this.different(this.library.animations.length,this.animationIndex));this.mode='DISSOLVING';this.age=0;return true;
     }
-    step(dt,motionScale=1,blowForce=0){this.blowForce=clamp(Number.isFinite(blowForce)?blowForce:0,0,1);dt=clamp(dt,0,.1);const motionDt=dt*clamp(Number.isFinite(motionScale)?motionScale:1,0,5);this.time+=motionDt;this.age+=dt;if(this.next)this.next.time+=motionDt;
+    step(dt,motionScale=1,blowForce=0){this.blowForce=clamp(Number.isFinite(blowForce)?blowForce:0,0,1);dt=clamp(dt,0,.1);const motionDt=dt*clamp(Number.isFinite(motionScale)?motionScale:1,0,9);this.time+=motionDt;this.age+=dt;if(this.next)this.next.time+=motionDt;
       if(this.mode==='ASSEMBLING'&&this.age>=ASSEMBLE_SECONDS){this.mode='READING';this.age=0;}
       if(this.mode==='DISSOLVING'&&this.age>=CHANGE_SECONDS)this.adopt(this.next);
     }

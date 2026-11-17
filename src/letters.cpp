@@ -66,7 +66,7 @@ bool prepare(Scene &scene, const Poem &poem, const MotionPreset &motion) {
     uint8_t eligible[12];
     int count = 0;
     for (uint8_t choice = 0; choice <= 12; choice++)
-      if (choice != 8 && poetryLayout(poem.text, scene.layout, choice)) eligible[count++] = choice;
+      if (choice != 8 && poetryLayout(poem.text, scene.layout, choice, poem.title)) eligible[count++] = choice;
     if (count > 1) {
       for (int i = 0; i < count; i++) if (eligible[i] == previousLayout) {
         for (int j = i; j < count - 1; j++) eligible[j] = eligible[j + 1];
@@ -76,7 +76,7 @@ bool prepare(Scene &scene, const Poem &poem, const MotionPreset &motion) {
     }
     if (count) scene.resolvedLayout = eligible[random(count)];
   }
-  scene.valid = poetryLayout(poem.text, scene.layout, scene.resolvedLayout);
+  scene.valid = poetryLayout(poem.text, scene.layout, scene.resolvedLayout, poem.title);
   if (!scene.valid) {
     Serial.printf("Poem cannot fit screen: %s\n", poem.id);
     return false;
@@ -228,7 +228,7 @@ void lettersAdoptNext() {
 }
 
 void lettersSetResponse(float motionScale, float blowForce) {
-  responseSpeed = isfinite(motionScale) ? fmaxf(1, fminf(5, motionScale)) : 1;
+  responseSpeed = isfinite(motionScale) ? fmaxf(1, fminf(9, motionScale)) : 1;
   responseForce = isfinite(blowForce) ? clamp01(blowForce) : 0;
 }
 
@@ -339,12 +339,16 @@ void lettersDraw() {
   }
   if (phase == ASSEMBLING || phase == READING || phase == DISSOLVING) {
     const float opacity = phase == READING ? 1 : phase == ASSEMBLING ? eased : 1 - eased;
-    const char *author = current->poem->by;
-    const int y = (int)current->layout.authorY;
     gfx->setTextSize(1);
-    gfx->setTextColor(atmosphereInk(.38f * opacity, 120, y));
-    gfx->setCursor((LCD_W - (int)strlen(author) * 6) / 2, y);
-    for (const char *c = author; *c; c++) gfx->write((uint8_t)*c);
+    const auto drawFooterLine = [opacity](const char *text, int y) {
+      gfx->setTextColor(atmosphereInk(.4f * opacity, 120, y));
+      gfx->setCursor((LCD_W - (int)strlen(text) * 6) / 2, y);
+      for (const char *c = text; *c; c++) gfx->write((uint8_t)*c);
+    };
+    const PoetryFooter &footer = current->layout.footer;
+    for (int line = 0; line < footer.count; line++)
+      drawFooterLine(footer.lines[line], footer.top + line * 14);
+    drawFooterLine(current->poem->by, (int)current->layout.authorY);
   }
 }
 int lettersCount() { return current->count; }

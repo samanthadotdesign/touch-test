@@ -5,6 +5,49 @@
 
 constexpr int POETRY_MAX_WORDS = 96;
 constexpr int POETRY_MAX_CHARS = 512;
+constexpr int POETRY_TITLE_WIDTH = 36;
+constexpr int POETRY_TITLE_LINES = 3;
+struct PoetryFooter {
+  char lines[POETRY_TITLE_LINES][POETRY_TITLE_WIDTH + 1] = {};
+  uint8_t count = 0;
+  int top = 295;
+};
+
+inline bool poetryFooter(const char *title, PoetryFooter &out) {
+  out = PoetryFooter();
+  if (!title) return true;
+  const size_t length = strlen(title);
+  if (length > 60) return false;
+  int used = 0;
+  for (size_t p = 0; p < length;) {
+    if (title[p] == ' ' || title[p] == '\n' || title[p] == '\r' || title[p] == '\t') {
+      p++; continue;
+    }
+    const size_t start = p;
+    while (p < length && title[p] != ' ' && title[p] != '\n'
+           && title[p] != '\r' && title[p] != '\t') {
+      if (title[p] < 32 || title[p] > 126) return false;
+      p++;
+    }
+    size_t offset = start;
+    while (offset < p) {
+      const size_t remaining = p - offset;
+      const int chunk = remaining > POETRY_TITLE_WIDTH ? POETRY_TITLE_WIDTH : (int)remaining;
+      if (!out.count) out.count = 1;
+      if (used && used + 1 + chunk > POETRY_TITLE_WIDTH) {
+        if (out.count >= POETRY_TITLE_LINES) return false;
+        out.count++; used = 0;
+      }
+      if (used) out.lines[out.count - 1][used++] = ' ';
+      memcpy(out.lines[out.count - 1] + used, title + offset, chunk);
+      used += chunk;
+      out.lines[out.count - 1][used] = '\0';
+      offset += chunk;
+    }
+  }
+  if (out.count) out.top = 281 - (out.count - 1) * 14;
+  return true;
+}
 struct PoetryWord {
   uint16_t offset;
   uint8_t length;
@@ -15,14 +58,36 @@ struct PoetryLayout {
   PoetryWord words[POETRY_MAX_WORDS];
   int count = 0;
   uint8_t size = 1;
-  float authorY = 0;
+  float authorY = 295;
+  PoetryFooter footer;
 };
 
-inline bool poetryLayout(const char *text, PoetryLayout &out, uint8_t arrangement = 0) {
+inline void poetryFitBody(PoetryLayout &out) {
+  float minimum = out.words[0].y + 160, maximum = minimum;
+  for (int i = 1; i < out.count; i++) {
+    minimum = fminf(minimum, out.words[i].y + 160);
+    maximum = fmaxf(maximum, out.words[i].y + 160);
+  }
+  // Retain each arrangement's geometry. Move only when its glyph boxes reach
+  // the footer, and tighten centre spacing only if a translation cannot fit.
+  const float lastCentre = out.footer.top - 20;
+  const float available = lastCentre - 8;
+  const float span = maximum - minimum;
+  const float scale = span > available ? available / span : 1;
+  const float fittedMaximum = minimum + span * scale;
+  const float shift = fmaxf(8 - minimum, fminf(0, lastCentre - fittedMaximum));
+  for (int i = 0; i < out.count; i++)
+    out.words[i].y = minimum + (out.words[i].y + 160 - minimum) * scale + shift - 160;
+}
+
+inline bool poetryLayout(const char *text, PoetryLayout &out, uint8_t arrangement = 0,
+                         const char *title = "") {
   const uint8_t size = 1;
   float widths[POETRY_MAX_WORDS + 1] = {};
   int line = 0;
   out.count = 0;
+  out.authorY = 295;
+  if (!poetryFooter(title, out.footer)) return false;
   const int advance = 6 * size;
   const size_t length = strlen(text);
   if (length > POETRY_MAX_CHARS) return false;
@@ -56,7 +121,6 @@ inline bool poetryLayout(const char *text, PoetryLayout &out, uint8_t arrangemen
     if (arrangement == 8 || arrangement > 12) return false; // random is resolved by the scene engine
     const float pi = 3.14159265359f;
     out.size = 1;
-    out.authorY = 296;
     float columnWidths[3] = {};
     int rows = 0, half = 0, firstLines = 0;
     int groupCounts[3] = {}, groupStarts[3] = {};
@@ -149,6 +213,7 @@ inline bool poetryLayout(const char *text, PoetryLayout &out, uint8_t arrangemen
       word.x = x - 120;
       word.y = y - 160;
     }
+    poetryFitBody(out);
     return true;
   }
   // Tighten long verse only, keeping at least four pixels between glyph rows.
@@ -171,12 +236,12 @@ inline bool poetryLayout(const char *text, PoetryLayout &out, uint8_t arrangemen
   if (blockWidth > 216) return false;
   const float top = (320 - totalHeight) / 2;
   out.size = size;
-  out.authorY = top + bodyHeight + 20;
   for (int i = 0; i < out.count; i++) {
     PoetryWord &w = out.words[i];
     if (arrangement == 0) w.x -= widths[w.line] / 2;
     else w.x += indent(w.line) - blockWidth / 2;
     w.y = top + w.line * lineHeight + 4 * size - 160;
   }
+  poetryFitBody(out);
   return true;
 }

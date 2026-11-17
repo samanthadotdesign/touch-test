@@ -53,18 +53,21 @@ void migrateProfiles() {
   assert(stored.begin("poetry", false));
   Preferences::clearAll();
   boot();
-  close(atmosphereThreshold(), .25f);
-  assert(stored.getUChar("threshold", 0) == 25 && stored.getUChar("micProfile", 0) == 1);
+  close(atmosphereThreshold(), .1f);
+  assert(stored.getUChar("threshold", 0) == 10 && stored.getUChar("micProfile", 0) == 2);
   assert(Preferences::writesTo("poetry", "threshold") == 1);
   assert(Preferences::writesTo("poetry", "micProfile") == 1);
 
-  for (uint8_t legacy : {75, 25, 20, 5, 0, 255}) {
-    Preferences::clearAll();
-    stored.putUChar("threshold", legacy);
-    boot();
-    const uint8_t expected = legacy >= 5 && legacy < 25 ? legacy : 25;
-    close(atmosphereThreshold(), expected / 100.f);
-    assert(stored.getUChar("threshold", 0) == expected && stored.getUChar("micProfile", 0) == 1);
+  for (uint8_t profile : {0, 1}) {
+    for (uint8_t legacy : {75, 25, 20, 10, 5, 0, 255}) {
+      Preferences::clearAll();
+      stored.putUChar("micProfile", profile);
+      stored.putUChar("threshold", legacy);
+      boot();
+      const uint8_t expected = legacy >= 5 && legacy < 10 ? legacy : 10;
+      close(atmosphereThreshold(), expected / 100.f);
+      assert(stored.getUChar("threshold", 0) == expected && stored.getUChar("micProfile", 0) == 2);
+    }
   }
 
   // The one-time update must not overwrite later personal calibration.
@@ -72,26 +75,27 @@ void migrateProfiles() {
   const size_t thresholdWrites = Preferences::writesTo("poetry", "threshold");
   boot(); close(atmosphereThreshold(), .65f);
   assert(Preferences::writesTo("poetry", "threshold") == thresholdWrites);
-  stored.putUChar("micProfile", 2); stored.putUChar("threshold", 45);
+  stored.putUChar("micProfile", 3); stored.putUChar("threshold", 45);
   boot(); close(atmosphereThreshold(), .45f);
-  assert(stored.getUChar("micProfile", 0) == 2); // an older firmware never downgrades a newer profile
+  assert(stored.getUChar("micProfile", 0) == 3); // an older firmware never downgrades a newer profile
   stored.putUChar("threshold", 255);
-  boot(); close(atmosphereThreshold(), .25f);
+  boot(); close(atmosphereThreshold(), .1f);
 
   // Never mark migration complete until its threshold is saved successfully.
-  Preferences::clearAll(); stored.putUChar("threshold", 75);
+  Preferences::clearAll(); stored.putUChar("threshold", 25); stored.putUChar("micProfile", 1);
   Preferences::failNextWrites("poetry", "threshold");
-  boot(); close(atmosphereThreshold(), .25f);
-  assert(stored.getUChar("threshold", 0) == 75 && stored.getUChar("micProfile", 0) == 0);
-  assert(Preferences::writesTo("poetry", "micProfile") == 0);
-  boot();
+  const size_t markersBefore = Preferences::writesTo("poetry", "micProfile");
+  boot(); close(atmosphereThreshold(), .1f);
   assert(stored.getUChar("threshold", 0) == 25 && stored.getUChar("micProfile", 0) == 1);
+  assert(Preferences::writesTo("poetry", "micProfile") == markersBefore);
+  boot();
+  assert(stored.getUChar("threshold", 0) == 10 && stored.getUChar("micProfile", 0) == 2);
   Preferences::clearAll(); stored.putUChar("threshold", 75);
   Preferences::failNextWrites("poetry", "micProfile");
   boot();
-  assert(stored.getUChar("threshold", 0) == 25 && stored.getUChar("micProfile", 0) == 0);
+  assert(stored.getUChar("threshold", 0) == 10 && stored.getUChar("micProfile", 0) == 0);
   boot();
-  assert(stored.getUChar("micProfile", 0) == 1);
+  assert(stored.getUChar("micProfile", 0) == 2);
 }
 
 void menuCalibrationPersists() {
@@ -108,19 +112,20 @@ void gentleBlowUsesTheTapSequence() {
   Preferences::clearAll(); boot(); advance(300);
   tapAt(220, 300); tapAt(60, 245); tapAt(220, 100);
   assert(microphoneEnabled && !appMenuVisible());
-  normalizedInput = .1f; advance(1000);
+  normalizedInput = .05f; advance(1000);
   assert(appState() == ST_MOVING); // movement response below the navigation threshold
-  normalizedInput = .306f; // the hardware driver's normalized .02 RMS breath
+  assert(atmosphereMotionScale() > 2.98f && atmosphereMotionScale() < 3);
+  normalizedInput = .135f; // the hardware driver's normalized .006 RMS breath
   const uint32_t firstBlowAt = nowMs;
-  while (appState() == ST_MOVING && nowMs - firstBlowAt < 300) advance(10);
-  assert(appState() == ST_ASSEMBLING && nowMs - firstBlowAt < 300);
+  while (appState() == ST_MOVING && nowMs - firstBlowAt < 150) advance(10);
+  assert(appState() == ST_ASSEMBLING && nowMs - firstBlowAt < 150);
   advance(600); assert(appState() == ST_READING);
   advance(3000); assert(appState() == ST_READING); // a held breath is one action
   normalizedInput = 0; advance(2200);
-  normalizedInput = .306f;
+  normalizedInput = .135f;
   const uint32_t secondBlowAt = nowMs;
-  while (appState() == ST_READING && nowMs - secondBlowAt < 300) advance(10);
-  assert(appState() == ST_DISSOLVING && nowMs - secondBlowAt < 300);
+  while (appState() == ST_READING && nowMs - secondBlowAt < 150) advance(10);
+  assert(appState() == ST_DISSOLVING && nowMs - secondBlowAt < 150);
   assert(lettersInfo().nextPoemId != nullptr);
   advance(700); assert(appState() == ST_MOVING);
   advance(2000); assert(appState() == ST_MOVING);

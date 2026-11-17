@@ -9,7 +9,13 @@
     function glyphs(text,callback){for(let c=0;c<text.length;c++){const glyph=font[text.charCodeAt(c)-32];if(!glyph)continue;for(let col=0;col<5;col++){const bits=glyph[col];for(let row=0;row<8;){if(!(bits&(1<<row))){row++;continue;}const first=row;while(row<8&&(bits&(1<<row)))row++;callback(c*6+col,first,1,row-first);}}}}
     function grey(amount){const g=Math.floor(Math.max(0,Math.min(1,amount))*255);return `rgb(${(g>>3)*255/31},${(g>>2)*255/63},${(g>>3)*255/31})`;}
     function ink(amount){if(!transparent)return grey(amount);const value=lightInk?255:0;return `rgba(${value},${value},${value},${Math.max(0,Math.min(1,amount))})`;}
-    function author(experience,opacity){ctx.fillStyle=ink(.38*opacity);const text=displayText(experience.poem.by),x=(240-text.length*6)/2,y=experience.arrangement.authorY;glyphs(text,(gx,gy,w,h)=>ctx.fillRect(Math.trunc(x+gx),Math.trunc(y+gy),w,h));}
+    function footer(experience,opacity){
+      ctx.fillStyle=ink(.4*opacity);
+      const {titleLines=[],titleY=281,authorY=295}=experience.arrangement;
+      const line=(text,y)=>{const x=(240-text.length*6)/2;glyphs(text,(gx,gy,w,h)=>ctx.fillRect(Math.trunc(x+gx),Math.trunc(y+gy),w,h));};
+      titleLines.forEach((text,index)=>line(text,titleY+index*14));
+      line(displayText(experience.poem.by),authorY);
+    }
     return function render(experience){
       if(transparent){lightInk=(options.getTheme?.()??'dark')==='dark';ctx.clearRect(0,0,240,320);}
       else{ctx.fillStyle='#000';ctx.fillRect(0,0,240,320);}
@@ -36,7 +42,7 @@
         });
       }
       const current=layers[0];
-      if(current.mode!=='MOVING')author(experience,current.mode==='READING'?1:current.mode==='ASSEMBLING'?current.progress:1-current.progress);
+      if(current.mode!=='MOVING')footer(experience,current.mode==='READING'?1:current.mode==='ASSEMBLING'?current.progress:1-current.progress);
     }
   }
   const api={createRenderer};

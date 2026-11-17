@@ -25,7 +25,7 @@ function atmosphereHarness({saved=null,savedColourway=null,storage,random=()=>.5
  const screen=element('screen'),hotspot=element('hotspot'),sheet=element('sheet'),backdrop=element('backdrop'),close=element('close');
  const choices=['dark','light','colour'].map(theme=>{const node=element(theme);node.dataset.theme=theme;return node;});
  const mic=element('mic'),status=element('status'),meter=element('meter'),bar=element('bar'),preview=element('preview'),output=element('output'),notice=element('notice'),threshold=element('threshold'),thresholdOutput=element('threshold-output'),blowFeedback=element('blow-feedback'),marker=element('marker');
- threshold.value='25';thresholdOutput.textContent='25%';
+ threshold.value='10';thresholdOutput.textContent='10%';
  sheet.hidden=backdrop.hidden=notice.hidden=true;screen.insertAdjacentHTML=()=>{};
  screen.querySelector=selector=>({'.atmosphere-hotspot':hotspot,'.atmosphere-sheet':sheet,'.atmosphere-backdrop':backdrop}[selector]);
  sheet.querySelector=selector=>{assert.equal(selector,'.sheet-close');return close;};
@@ -60,21 +60,25 @@ function atmosphereHarness({saved=null,savedColourway=null,storage,random=()=>.5
 function audioStream(){const trackEvents=new Map(),track={stops:0,stop(){this.stops++;},addEventListener:(type,handler)=>trackEvents.set(type,handler)};return{track,getTracks:()=>[track],getAudioTracks:()=>[track],end:()=>trackEvents.get('ended')?.()};}
 
 test('sound level measures RMS above a noise floor and clamps to a useful range',()=>{
- assert.equal(levelFromSamples([]),0);assert.equal(levelFromSamples([0,0,0]),0);assert.equal(levelFromSamples([.002,-.002]),0);
- assert.ok(Math.abs(levelFromSamples([.02,-.02])-.306)<1e-12);
- assert.equal(levelFromSamples([1,-1]),1);assert.ok(levelFromSamples([.04,-.04])<levelFromSamples([.1,-.1]));
+ assert.equal(levelFromSamples([]),0);assert.equal(levelFromSamples([0,0,0]),0);assert.equal(levelFromSamples([.001,-.001]),0);
+ assert.ok(Math.abs(levelFromSamples([.006,-.006])-.135)<1e-12);
+ assert.equal(levelFromSamples([1,-1]),1);assert.ok(levelFromSamples([.006,-.006])<levelFromSamples([.02,-.02]));
 });
-test('sound smoothing attacks quickly, releases slowly, and keeps motion within 1–5 times',()=>{
+test('sound smoothing reacts quickly and uses a curved motion boost up to nine times',()=>{
  const attack=smoothLevel(0,1,.1),release=1-smoothLevel(1,0,.1);
  assert.ok(attack>release);assert.equal(smoothLevel(.4,1,-1),.4);assert.equal(smoothLevel(.4,1,NaN),.4);
  assert.equal(smoothLevel(0,1,1),attack);assert.equal(motionScale(0),1);assert.equal(motionScale(0,true),1.25);
- assert.equal(motionScale(1,true),5);assert.equal(motionScale(100,true),5);assert.equal(motionScale(-1),1);
+ assert.equal(motionScale(1,true),9);assert.equal(motionScale(100,true),9);assert.equal(motionScale(-1),1);
+ assert.ok(smoothLevel(0,1,.02)>.65,'movement responds strongly in the first20ms');
+ assert.ok(smoothLevel(1,0,.1)<.6,'movement settles quickly after sound stops');
+ assert.ok(motionScale(.05,true)>2.9&&motionScale(.05,true)<3,'quiet input produces a visible curved boost');
+ assert.equal(motionScale(1),8.75);
 });
 test('blow gate rejects spikes and fires once per sustained breath',()=>{
  const gate=createBlowGate();
- assert.equal(gate.threshold,.25);assert.equal(gate.armed,true);assert.equal(gate.progress,0);
+ assert.equal(gate.threshold,.10);assert.equal(gate.armed,true);assert.equal(gate.progress,0);
  assert.equal(gate.update(.9,.05),false);
- assert.ok(gate.progress>0&&gate.progress<1);assert.equal(gate.update(.1,.01),false);assert.equal(gate.progress,0);
+ assert.ok(gate.progress>0&&gate.progress<1);assert.equal(gate.update(.01,.01),false);assert.equal(gate.progress,0);
  let triggers=0;for(let i=0;i<3;i++)triggers+=Number(gate.update(.9,.05));
  assert.equal(triggers,1);assert.equal(gate.armed,false);
  for(let i=0;i<100;i++)assert.equal(gate.update(1,.1),false);
@@ -85,9 +89,9 @@ test('blow gate requires fresh raw sound throughout the hold instead of a smooth
  assert.equal(gate.update(1,.05,true,1),false);
  assert.equal(gate.update(.65,.05,true,0),false);assert.equal(gate.progress,0);
  assert.equal(gate.update(.4,.05,true,0),false);
- assert.equal(gate.update(.1,.05,true,1),false);assert.equal(gate.progress,0,'raw strength alone cannot complete the hold');
- assert.equal(gate.update(.31,.06,true,.31),false);
- assert.equal(gate.update(.31,.06,true,.31),true);
+ assert.equal(gate.update(.01,.05,true,1),false);assert.equal(gate.progress,0,'raw strength alone cannot complete the hold');
+ assert.equal(gate.update(.135,.03,true,.135),false);
+ assert.equal(gate.update(.135,.03,true,.135),true);
  assert.equal(gate.armed,false);
 });
 test('blow gate needs a quiet release and cooldown before a new breath can fire',()=>{
@@ -102,9 +106,10 @@ test('blow gate needs a quiet release and cooldown before a new breath can fire'
  let triggers=0;for(let i=0;i<3;i++)triggers+=Number(gate.update(.9,.05));assert.equal(triggers,1);
 });
 test('blow gate bounds inputs, caps elapsed time, and resets when disabled',()=>{
+ const capped=createBlowGate({holdSeconds:.3});
+ assert.equal(capped.update(1,10),false);assert.ok(Math.abs(capped.progress-.1/.3)<1e-9);
+ const progress=capped.progress;assert.equal(capped.update(1,NaN),false);assert.equal(capped.update(1,-1),false);assert.equal(capped.progress,progress);
  const gate=createBlowGate();
- assert.equal(gate.update(1,10),false);assert.ok(Math.abs(gate.progress-.1/.12)<1e-9);
- const progress=gate.progress;assert.equal(gate.update(1,NaN),false);assert.equal(gate.update(1,-1),false);assert.equal(gate.progress,progress);
  gate.setThreshold(2);assert.equal(gate.threshold,.95);gate.setThreshold(-1);assert.equal(gate.threshold,.05);
  gate.setThreshold(NaN);assert.ok(gate.threshold>=.05&&gate.threshold<=.95);
  gate.reset();assert.equal(gate.progress,0);assert.equal(gate.armed,true);
@@ -162,16 +167,19 @@ test('corrupt or blocked colourway storage still opens colourfully without crash
 test('sound preview accelerates smoothly without microphone permission and shader status is visible only on failure',()=>{
  const app=atmosphereHarness();assert.equal(app.controller.step(.1),1);
  app.preview.value='100';app.preview.dispatch('input');assert.equal(app.blows,0);assert.equal(app.requests.length,0);
- let speed=app.controller.step(.1);assert.ok(speed>1&&speed<4.75);assert.ok(Number(app.meter.attributes.get('aria-valuenow'))>0);
- for(let i=0;i<20;i++)speed=app.controller.step(.1);assert.ok(speed>4.7);assert.match(app.output.textContent,/%$/);
+ let speed=app.controller.step(.1);assert.ok(speed>8&&speed<8.75);assert.ok(Number(app.meter.attributes.get('aria-valuenow'))>0);
+ for(let i=0;i<20;i++)speed=app.controller.step(.1);assert.ok(speed>8.7);assert.match(app.output.textContent,/%$/);
  app.preview.value='0';app.preview.dispatch('input');assert.ok(app.controller.step(.1)<speed);assert.equal(app.controller.micActive,false);
  app.controller.setShaderStatus(false);assert.equal(app.notice.hidden,false);assert.equal(app.screen.dataset.shader,'unavailable');
  app.controller.setShaderStatus(true);assert.equal(app.notice.hidden,true);assert.equal(app.screen.dataset.shader,'ready');
 });
-test('gentle preview spreads without navigating and a held strong preview triggers only once',()=>{
- const app=atmosphereHarness();app.preview.value='10';app.preview.dispatch('input');
+test('low linear input curves the movement without triggering navigation and a held breath triggers once',()=>{
+ const app=atmosphereHarness();app.preview.value='5';app.preview.dispatch('input');
  for(let i=0;i<30;i++)app.controller.step(.1);
- assert.equal(app.blows,0);assert.ok(app.controller.blowForce>.09&&app.controller.blowForce<.11);
+ assert.equal(app.blows,0);assert.ok(app.controller.level>.049&&app.controller.level<.051);
+ assert.ok(app.controller.blowForce>.22&&app.controller.blowForce<.23);assert.equal(app.meter.attributes.get('aria-valuenow'),'5');
+ assert.ok(Math.abs(app.controller.blowForce-Math.sqrt(app.controller.level))<1e-12);
+ assert.equal(app.output.textContent,'5%');assert.ok(app.controller.motionScale>2.7);
  app.preview.value='100';app.preview.dispatch('input');for(let i=0;i<40;i++)app.controller.step(.1);
  assert.equal(app.blows,1);assert.ok(app.controller.blowForce>.99);
  app.preview.value='0';app.preview.dispatch('input');for(let i=0;i<30;i++)app.controller.step(.1);
@@ -198,24 +206,24 @@ test('live microphone breaths rearm after quiet and stopping ignores residual st
  app.controller.stopMic();
 
  const other=audioStream(),stopped=atmosphereHarness({getUserMedia:()=>Promise.resolve(other)});
- stopped.threshold.value='5';stopped.threshold.dispatch('input');await stopped.controller.toggleMic();stopped.sample(.02);
- stopped.controller.step(.1);
+ stopped.threshold.value='5';stopped.threshold.dispatch('input');await stopped.controller.toggleMic();stopped.sample(.006);
+ stopped.controller.step(.04);
  assert.equal(stopped.blows,0);assert.ok(stopped.controller.blowForce>.15);
  stopped.controller.stopMic();for(let i=0;i<30;i++)stopped.controller.step(.1);
  assert.equal(stopped.blows,0,'residual smoothing after mic stop must not trigger navigation');
  assert.equal(other.track.stops,1);assert.equal(stopped.controller.micActive,false);
 });
-test('a gentle live breath triggers in about 180 ms, ignores the noise floor, and waits for a new breath',async()=>{
+test('a soft live breath triggers within 150 ms, ignores the noise floor, and waits for a new breath',async()=>{
  const incoming=audioStream(),app=atmosphereHarness({getUserMedia:()=>Promise.resolve(incoming)});
- await app.controller.toggleMic();assert.equal(app.threshold.value,'25');assert.equal(app.marker.style.left,'25%');
- app.sample(.002);for(let i=0;i<50;i++)app.controller.step(.02);
+ await app.controller.toggleMic();assert.equal(app.threshold.value,'10');assert.equal(app.marker.style.left,'10%');
+ app.sample(.001);for(let i=0;i<50;i++)app.controller.step(.02);
  assert.equal(app.blows,0);assert.equal(app.controller.blowForce,0);
- app.sample(.02);let firedAt=0;
+ app.sample(.006);let firedAt=0;
  for(let i=1;i<=10;i++){app.controller.step(.02);if(app.blows&&!firedAt)firedAt=i*.02;}
- assert.equal(app.blows,1);assert.ok(firedAt>=.16&&firedAt<=.20,`Gentle breath triggered at ${firedAt}s`);
+ assert.equal(app.blows,1);assert.ok(firedAt>=.06&&firedAt<.15,`Gentle breath triggered at ${firedAt}s`);
  for(let i=0;i<100;i++)app.controller.step(.02);assert.equal(app.blows,1,'held room noise or one held breath triggers once');
  app.sample(0);for(let i=0;i<35;i++)app.controller.step(.02);
- app.sample(.02);for(let i=0;i<10;i++)app.controller.step(.02);assert.equal(app.blows,2);
+ app.sample(.006);for(let i=0;i<10;i++)app.controller.step(.02);assert.equal(app.blows,2);
  app.controller.stopMic();
 });
 test('a 50 ms full-scale live spike cannot trigger while its slower visual response fades',async()=>{
@@ -229,7 +237,7 @@ test('a 50 ms full-scale live spike cannot trigger while its slower visual respo
 test('switching from a strong preview to a quiet microphone cannot complete a preview breath',async()=>{
  const incoming=audioStream(),app=atmosphereHarness({getUserMedia:()=>Promise.resolve(incoming)});
  app.threshold.value='35';app.threshold.dispatch('input');app.preview.value='100';app.preview.dispatch('input');
- app.controller.step(.1);
+ app.controller.step(.04);
  const visualStrength=app.controller.blowForce;assert.ok(visualStrength>.6);assert.equal(app.blows,0);
  await app.controller.toggleMic();assert.equal(app.controller.blowForce,visualStrength,'source changes preserve the continuous visual response');
  app.sample(0);for(let i=0;i<15;i++)app.controller.step(.1);
@@ -261,8 +269,8 @@ test('microphone denial closes audio resources and leaves the preview available'
 test('live microphone increases motion with volume and stopping releases tracks and audio nodes',async()=>{
  const incoming=audioStream(),app=atmosphereHarness({getUserMedia:()=>Promise.resolve(incoming)});
  await app.controller.toggleMic();assert.equal(app.controller.micActive,true);assert.equal(app.blows,0);assert.equal(app.preview.disabled,true);
- const quiet=app.controller.step(.1);app.sample(.01);const spoken=app.controller.step(.1);assert.ok(spoken>quiet);
- app.sample(.02);const loud=app.controller.step(.1);assert.ok(loud>spoken&&loud<=5);
+ const quiet=app.controller.step(.1);app.sample(.003);const spoken=app.controller.step(.1);assert.ok(spoken>quiet);
+ app.sample(.006);const loud=app.controller.step(.1);assert.ok(loud>spoken&&loud<=9);
  app.controller.stopMic();assert.equal(incoming.track.stops,1);assert.equal(app.contexts[0].closed,1);assert.equal(app.contexts[0].sourceDisconnected,true);assert.equal(app.contexts[0].analyserDisconnected,true);assert.equal(app.preview.disabled,false);assert.equal(app.controller.micActive,false);
 });
 test('cancelled microphone requests stop late-arriving tracks and cannot restart listening',async()=>{

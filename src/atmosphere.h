@@ -8,7 +8,7 @@ enum AtmosphereTheme : uint8_t {
   ATM_COLOUR
 };
 constexpr uint8_t ATM_COLOURWAY_COUNT = 3;
-constexpr float ATM_DEFAULT_THRESHOLD = .25f;
+constexpr float ATM_DEFAULT_THRESHOLD = .10f;
 constexpr float ATM_MIN_THRESHOLD = .05f;
 constexpr float ATM_MAX_THRESHOLD = .95f;
 

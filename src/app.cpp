@@ -17,8 +17,8 @@ bool wasDown = false, dirty = true, menuOpen = false, settingsReady = false;
 int poemIndex = -1, motionIndex = -1;
 Preferences settings;
 constexpr int MENU_TOP = 88;
-constexpr uint8_t MIC_PROFILE_VERSION = 1;
-constexpr uint8_t DEFAULT_THRESHOLD_PERCENT = 25;
+constexpr uint8_t MIC_PROFILE_VERSION = 2;
+constexpr uint8_t DEFAULT_THRESHOLD_PERCENT = 10;
 constexpr uint8_t MIN_THRESHOLD_PERCENT = 5;
 constexpr uint8_t MAX_THRESHOLD_PERCENT = 95;
 

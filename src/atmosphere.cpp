@@ -9,7 +9,8 @@ constexpr int GRID_W = (LCD_W + GRID_STEP - 1) / GRID_STEP + 1;
 constexpr int GRID_H = (LCD_H + GRID_STEP - 1) / GRID_STEP + 1;
 constexpr int BLOB_COUNT = 7;
 constexpr int EXP_STEPS = 256;
-constexpr float GRID_INTERVAL = .1f;
+constexpr float QUIET_GRID_INTERVAL = .1f;
+constexpr float ACTIVE_GRID_INTERVAL = .05f;
 
 struct RGB { uint8_t r, g, b; };
 struct Colour { float r, g, b; };
@@ -110,7 +111,7 @@ uint8_t byteChannel(float value) {
 void rebuildGrid() {
   Blob blobs[BLOB_COUNT];
   const float metricX = 1, metricY = (float)LCD_H / LCD_W;
-  const float force = normalized(level);
+  const float force = atmosphereBlowForce();
   for (int i = 0; i < BLOB_COUNT; i++) {
     const float r1 = fieldHash(i + .7f, 13.f);
     const float r2 = fieldHash(i + 8.2f, 14.9f);
@@ -186,7 +187,7 @@ void updateGate(float dt, float target, bool enabled) {
   // A real, continuing breath must stay over the threshold. Release easing
   // keeps movement soft, but cannot turn a short click/spike into navigation.
   held = target >= threshold && detectionLevel >= threshold ? held + dt : 0;
-  if (held + 1e-6f < .12f) return;
+  if (held + 1e-6f < .06f) return;
   pendingBlow = true;
   armed = false;
   held = quiet = 0;
@@ -212,24 +213,26 @@ void atmosphereUpdate(float dt, float rawLevel, bool micEnabled, bool allowAdvan
   if (microphoneOn != micEnabled) { detectionLevel = 0; resetGate(); }
   microphoneOn = micEnabled;
   const float target = micEnabled ? normalized(rawLevel) : 0;
-  const float response = 1 - expf(-dt / (target > level ? .09f : .65f));
+  const float response = 1 - expf(-dt / (target > level ? .018f : .18f));
   level += (target - level) * response;
-  const float detectionResponse = 1 - expf(-dt / (target > detectionLevel ? .04f : .10f));
+  const float detectionResponse = 1 - expf(-dt / (target > detectionLevel ? .015f : .06f));
   detectionLevel += (target - detectionLevel) * detectionResponse;
   updateGate(dt, target, micEnabled && allowAdvance);
   driftClock += dt * .36f * atmosphereMotionScale();
   paletteClock += dt * .12f;
   gridAge += dt;
-  if (gridAge + 1e-6f >= GRID_INTERVAL) {
-    gridAge = fmodf(gridAge, GRID_INTERVAL);
+  const float gridInterval = microphoneOn || level > .001f
+      ? ACTIVE_GRID_INTERVAL : QUIET_GRID_INTERVAL;
+  if (gridAge + 1e-6f >= gridInterval) {
+    gridAge = fmodf(gridAge, gridInterval);
     rebuildGrid();
   }
 }
 
 bool atmosphereTakeBlow() { const bool result = pendingBlow; pendingBlow = false; return result; }
 float atmosphereLevel() { return level; }
-float atmosphereMotionScale() { return fminf(5.f, (microphoneOn ? 1.25f : 1.f) + level * 3.75f); }
-float atmosphereBlowForce() { return level; }
+float atmosphereMotionScale() { return fminf(9.f, (microphoneOn ? 1.25f : 1.f) + atmosphereBlowForce() * 7.75f); }
+float atmosphereBlowForce() { return sqrtf(normalized(level)); }
 void atmosphereSetTheme(AtmosphereTheme value) {
   if (!initialized) atmosphereBegin();
   if (value != ATM_NIGHT && value != ATM_PAPER && value != ATM_COLOUR) return;

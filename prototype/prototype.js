@@ -30,7 +30,7 @@
     const reading = mode === 'READING';
     const transitioning = mode === 'ASSEMBLING' || mode === 'DISSOLVING';
     const description = reading
-      ? experience.poem.text + ' By ' + experience.poem.by + '. Touch or blow again for another poem.'
+      ? (experience.poem.workTitle?.trim() ? experience.poem.workTitle.trim() + '. ' : '') + experience.poem.text + ' By ' + experience.poem.by + '. Touch or blow again for another poem.'
       : transitioning ? 'The words are moving into place.' : 'Touch to assemble the poem, or blow above the threshold with the mic enabled.';
     canvas.setAttribute('aria-label', 'Poetry display. ' + description);
     canvas.setAttribute('aria-disabled', String(transitioning));

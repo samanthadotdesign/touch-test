@@ -48,6 +48,123 @@ void tapAt(int16_t x, int16_t y) {
   touchX = x; touchY = y; tap(); touchX = 120; touchY = 160;
 }
 
+void assertFooterRow(const char *text, int y, float fade = 1) {
+  size_t count = 0;
+  const int start = (240 - (int)strlen(text) * 6) / 2;
+  for (const auto &glyph : testGfx.glyphWrites) {
+    if (glyph.y != y) continue;
+    assert(count < strlen(text));
+    assert(glyph.ch == text[count] && glyph.x == start + (int)count * 6);
+    assert(glyph.color == atmosphereInk(.4f * fade, 120, y));
+    count++;
+  }
+  assert(count == strlen(text));
+}
+void assertBodyClearsFooter(const PoetryLayout &layout) {
+  assert(layout.authorY == 295);
+  for (int i = 0; i < layout.count; i++) {
+    assert(layout.words[i].y + 160 - 4 >= 4 - .001f);
+    assert(layout.words[i].y + 160 + 4 <= layout.footer.top - 16 + .001f);
+  }
+}
+void footerLayoutAndRendering() {
+  const char *body = "A small light\nleans into dusk.\nThe room remembers\nhow to be still.";
+  const std::string longTitle = std::string(20, 'a') + " " + std::string(20, 'b') + " "
+      + std::string(18, 'c');
+  const std::string longAuthor(35, 'd');
+  PoetryLayout layout, untitled;
+  assert(poetryLayout(body, layout, 0, longTitle.c_str()));
+  assert(layout.footer.count == 3 && layout.footer.top == 253);
+  assert(strcmp(layout.footer.lines[0], std::string(20, 'a').c_str()) == 0);
+  assert(strcmp(layout.footer.lines[1], std::string(20, 'b').c_str()) == 0);
+  assert(strcmp(layout.footer.lines[2], std::string(18, 'c').c_str()) == 0);
+  assertBodyClearsFooter(layout);
+  assert(poetryLayout(body, layout, 0, std::string(60, 'w').c_str()));
+  assert(layout.footer.count == 2 && layout.footer.top == 267);
+  assert(strlen(layout.footer.lines[0]) == 36 && strlen(layout.footer.lines[1]) == 24);
+  assert(!poetryLayout(body, layout, 0, std::string(61, 'w').c_str()));
+  assert(poetryLayout(body, layout, 0, "  \t\n "));
+  assert(layout.footer.count == 0 && layout.footer.top == 295);
+
+  MotionPreset whole = MOTIONS[0]; whole.unit = 1;
+  for (uint8_t choice = 0; choice <= 12; choice++) {
+    if (choice == 8) continue;
+    assert(poetryLayout(body, untitled, choice));
+    assert(poetryLayout(body, layout, choice, longTitle.c_str()));
+    assert(layout.count == untitled.count);
+    assertBodyClearsFooter(layout);
+    for (int i = 0; i < layout.count; i++) {
+      assert(layout.words[i].offset == untitled.words[i].offset);
+      assert(layout.words[i].length == untitled.words[i].length);
+      assert(layout.words[i].x == untitled.words[i].x);
+    }
+    Poem poem = {"footer", "Book title", body, longAuthor.c_str(), choice};
+    assert(lettersLoadPoem(poem, whole));
+    lettersAssemble(); lettersUpdate(.55f); lettersDraw();
+    assertFooterRow("Book title", 281);
+    assertFooterRow(longAuthor.c_str(), 295);
+    assert(testGfx.textSize == 1);
+  }
+
+  std::string grid = "a";
+  for (int i = 1; i < 36; i++) grid += " a";
+  assert(poetryLayout(grid.c_str(), untitled, 3));
+  assert(poetryLayout(grid.c_str(), layout, 3, longTitle.c_str()));
+  assert(layout.count == 36);
+  assertBodyClearsFooter(layout);
+  float first = 1000, last = -1000;
+  for (int i = 0; i < layout.count; i++) {
+    assert(layout.words[i].x == untitled.words[i].x);
+    first = fminf(first, layout.words[i].y);
+    last = fmaxf(last, layout.words[i].y);
+  }
+  assert(fabsf(last - first - 225) < .001f); // taller spatial forms tighten only their centres
+
+  // Keep every verse row, including blank stanzas, with the longest footer.
+  std::string verse = "word";
+  for (int i = 1; i < 22; i++) verse += "\nword";
+  for (uint8_t choice : {0, 1, 2, 9, 10}) {
+    assert(poetryLayout(verse.c_str(), layout, choice, longTitle.c_str()));
+    assert(layout.count == 22 && layout.words[21].line == 21);
+    assertBodyClearsFooter(layout);
+    const float pitch = layout.words[1].y - layout.words[0].y;
+    assert(pitch >= 10 && pitch <= 12);
+    for (int i = 1; i < layout.count; i++)
+      assert(fabsf(layout.words[i].y - layout.words[i - 1].y - pitch) < .001f);
+  }
+  assert(!poetryLayout((verse + "\nword").c_str(), layout, 0, longTitle.c_str()));
+  Poem longPoem = {"long-footer", longTitle.c_str(), verse.c_str(), longAuthor.c_str(), 0};
+  assert(lettersLoadPoem(longPoem, whole));
+  assert(lettersInfo().realParticles == 22);
+  lettersAssemble(); lettersUpdate(.55f); lettersDraw();
+  PoetryFooter footer;
+  assert(poetryFooter(longTitle.c_str(), footer));
+  for (int row = 0; row < 3; row++) assertFooterRow(footer.lines[row], 253 + row * 14);
+  assertFooterRow(longAuthor.c_str(), 295);
+  assert(testGfx.glyphWrites.size() == 22 * 4 + 58 + 35);
+
+  // Both metadata rows share their fixed positions and fade through each theme.
+  for (int theme = ATM_NIGHT; theme <= ATM_COLOUR; theme++) {
+    atmosphereSetTheme((AtmosphereTheme)theme);
+    Poem poem = {"fade-footer", "Book title", body, "Author", 0};
+    assert(lettersLoadPoem(poem, whole)); lettersDraw();
+    assert(testGfx.glyphWrites.empty());
+    lettersAssemble(); lettersUpdate(.275f); lettersDraw();
+    assertFooterRow("Book title", 281, .5f); assertFooterRow("Author", 295, .5f);
+    lettersUpdate(.275f); lettersDraw();
+    assertFooterRow("Book title", 281); assertFooterRow("Author", 295);
+    assert(lettersPrepareNext(poem, whole)); lettersDissolve();
+    lettersUpdate(.325f); lettersDraw();
+    assertFooterRow("Book title", 281, .5f); assertFooterRow("Author", 295, .5f);
+    lettersUpdate(.325f); lettersDraw();
+    assertFooterRow("Book title", 281, 0); assertFooterRow("Author", 295, 0);
+    poem.title = "";
+    assert(lettersLoadPoem(poem, whole)); lettersAssemble(); lettersUpdate(.55f); lettersDraw();
+    assertFooterRow("", 281); assertFooterRow("Author", 295);
+  }
+  atmosphereSetTheme(ATM_COLOUR);
+}
+
 int main() {
   Preferences::clearAll();
   atmosphereBegin();
@@ -72,7 +189,7 @@ int main() {
   for (const auto &p : POEMS) {
     bool eligible = false;
     for (uint8_t choice = 0; choice <= 12; choice++)
-      if (choice != 8) eligible |= poetryLayout(p.text, layout, choice);
+      if (choice != 8) eligible |= poetryLayout(p.text, layout, choice, p.title);
     assert(eligible);
   }
   assert(poetryLayout("longer line\na", layout, 1));
@@ -139,7 +256,7 @@ int main() {
   for (uint8_t choice = 0; choice <= 12; choice++) {
     if (choice == 8) continue;
     assert(poetryLayout(fixedPoem.text, layout, choice));
-    if (choice >= 3 && choice <= 7) assert(layout.authorY == 296);
+    assert(layout.authorY == 295);
     for (int i = 0; i < layout.count; i++) {
       assert(isfinite(layout.words[i].x) && isfinite(layout.words[i].y));
       assert(layout.words[i].x - layout.words[i].length * 3 >= -120);
@@ -147,6 +264,7 @@ int main() {
       assert(layout.words[i].y >= -156 && layout.words[i].y <= 124);
     }
   }
+  footerLayoutAndRendering();
   Poem randomized = fixedPoem; randomized.layout = 8;
   int previousResolved = -1;
   assert(lettersLoadPoem(randomized, MOTIONS[0]));
@@ -346,9 +464,9 @@ int main() {
     }
   }
   assert(lettersLoadPoem(fixedPoem, mixedMotion));
-  lettersSetResponse(5, 1);
+  lettersSetResponse(9, 1);
   lettersUpdate(.1f);
-  assert(fabsf(lettersInfo().time - .5f) < .001f);
+  assert(fabsf(lettersInfo().time - .9f) < .001f);
   lettersAssemble(); lettersUpdate(.54f);
   assert(!lettersTransitionDone());
   lettersUpdate(.01f);
@@ -360,7 +478,7 @@ int main() {
   lettersUpdate(.01f);
   assert(lettersTransitionDone());
   const float scaledIncoming = lettersInfo().nextTime;
-  assert(fabsf(scaledIncoming - 3.25f) < .001f);
+  assert(fabsf(scaledIncoming - 5.85f) < .001f);
   lettersAdoptNext();
   assert(fabsf(lettersInfo().time - scaledIncoming) < .001f);
   lettersSetResponse(NAN, INFINITY); // invalid response cannot contaminate poses

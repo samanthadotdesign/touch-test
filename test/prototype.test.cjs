@@ -99,10 +99,19 @@ test('microphone activation and gentle blowing preserve reading until a new stro
   assert.equal(app.blow(),false);app.advance(.7);assert.equal(app.experience.mode,'MOVING');
 });
 
+test('reading accessibility includes only an actual work title and never the library label',()=>{
+  const app=prototypeHarness(),saved=savedLibrary(app);
+  saved.library.poems[0].title='Private library label';saved.library.poems[0].workTitle='Actual Work';
+  app.storage(app.storageKey,JSON.stringify(saved));app.pointer();app.advance(.6);
+  assert.match(app.attributes.get('aria-label'),/Actual Work\. Saved in/);assert.ok(!app.attributes.get('aria-label').includes('Private library label'));
+  saved.library.poems[0].workTitle='';app.storage(app.storageKey,JSON.stringify(saved));app.pointer();app.advance(.6);
+  assert.ok(!app.attributes.get('aria-label').includes('Actual Work'));assert.ok(!app.attributes.get('aria-label').includes('Private library label'));
+});
+
 test('strong blows follow the tap sequence while speed and outward force preserve transition timing',()=>{
   const app=prototypeHarness(),poem=app.experience.poem.id;
-  const before=app.experience.time;app.atmosphere.step=()=>5;app.atmosphere.blowForce=.45;app.frame(100);
-  assert.ok(Math.abs(app.experience.time-before-.5)<1e-6);assert.equal(app.stepCalls.at(-1)[2],.45);
+  const before=app.experience.time;app.atmosphere.step=()=>9;app.atmosphere.blowForce=.45;app.frame(100);
+  assert.ok(Math.abs(app.experience.time-before-.9)<1e-6);assert.equal(app.stepCalls.at(-1)[2],.45);
   assert.equal(app.blow(),true);assert.equal(app.experience.mode,'ASSEMBLING');assert.equal(app.blow(),false);
   app.advance(.5);assert.equal(app.experience.mode,'ASSEMBLING');app.advance(.1);assert.equal(app.experience.mode,'READING');
   assert.equal(app.experience.poem.id,poem);app.advance(10);assert.equal(app.experience.mode,'READING');

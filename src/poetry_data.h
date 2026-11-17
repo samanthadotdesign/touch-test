@@ -2,6 +2,7 @@
 #pragma once
 #include <stdint.h>
 
+// Poem.title is the normalized display workTitle, not the library title label.
 struct Poem { const char *id; const char *title; const char *text; const char *by; uint8_t layout; };
 static const Poem POEMS[] = {
   {"time-present", "", "Time present and time past\nAre both perhaps present in time future\nAnd time future contained in time past.", "T.S. Eliot", 8},
@@ -9,14 +10,14 @@ static const Poem POEMS[] = {
   {"time-is-like-a-river", "Meditations", "Time is like a river made up of the events which happen, and a violent stream; for as soon as a thing has been seen, it is carried away, and another comes in its place, and this will be carried away too.", "Marcus Aurelius", 8},
   {"every-act", "The Paper Menagerie and Other Stories", "We are defined by the places we hold in the web of others' lives.", "Ken Liu", 8},
   {"every-act-memory", "The Paper Menagerie and Other Stories", "We spend our entire lives trying to tell stories about ourselves-they're the essence of memory. It is how we make living in this unfeeling, accidental universe tolerable.", "Ken Liu", 8},
-  {"make-sure-the-things-we-do", "Make sure the things we do", "Make sure the things we do to make ourselves feel better don't make us feel worse.", "Gretchen Rubin", 8},
-  {"act-the-way-i-want-to-feel", "Act the way I want to feel", "Act the way I want to feel. It's easy to assume that we act beacuse of the way we feel, but to a very great degree, we feel because of the way we act.", "Gretchen Rubin", 8},
-  {"if-you-want-to-create-something-worthwhile", "If you want to create something worthwhile", "If you want to create something worthwhile with your life, you need to draw a line between the world's demands and your own ambitions.", "Mark McGuinness", 8},
-  {"i-went-to-the-woods", "I went to the woods", "I went to the woods because I wished to live deliberately, to front only the essential facts of life, and see if I could not learn what it had to teach, and not, when I came to die, discover that I had not lived.", "Henry David Thoreau", 8},
-  {"you-can-t-try-to-do-things", "You can't try to do things", "You can't try to do things, you must simple do them.", "Ray Bradbury", 8},
-  {"work-to-become", "Work to become", "Work to become, not to acquire.", "Elbert Hubbard", 8},
-  {"being-right-keeps-you-in-place", "Being right keeps you in place", "Being right keeps you in place, being wrong forces you to explore.", "Steve Johnson", 8},
-  {"uncertainty-is-an-uncomfortable-position", "Uncertainty is an uncomfortable position", "Uncertainty is an uncomfortable position. But certainty is an absurd one.", "Voltaire", 8},
+  {"make-sure-the-things-we-do", "", "Make sure the things we do to make ourselves feel better don't make us feel worse.", "Gretchen Rubin", 8},
+  {"act-the-way-i-want-to-feel", "", "Act the way I want to feel. It's easy to assume that we act beacuse of the way we feel, but to a very great degree, we feel because of the way we act.", "Gretchen Rubin", 8},
+  {"if-you-want-to-create-something-worthwhile", "", "If you want to create something worthwhile with your life, you need to draw a line between the world's demands and your own ambitions.", "Mark McGuinness", 8},
+  {"i-went-to-the-woods", "", "I went to the woods because I wished to live deliberately, to front only the essential facts of life, and see if I could not learn what it had to teach, and not, when I came to die, discover that I had not lived.", "Henry David Thoreau", 8},
+  {"you-can-t-try-to-do-things", "", "You can't try to do things, you must simple do them.", "Ray Bradbury", 8},
+  {"work-to-become", "", "Work to become, not to acquire.", "Elbert Hubbard", 8},
+  {"being-right-keeps-you-in-place", "", "Being right keeps you in place, being wrong forces you to explore.", "Steve Johnson", 8},
+  {"uncertainty-is-an-uncomfortable-position", "", "Uncertainty is an uncomfortable position. But certainty is an absurd one.", "Voltaire", 8},
   {"sea-rose", "Sea Rose", "\"Rose, harsh rose,\nmarred and with stint of petals,\nmeagre flower, thin,\nsparse of leaf,\n\nmore precious\nthan a wet rose\nsingle on a stem-\nyou are caught in the drift.\n\nStunted, with small leaf,\nyou are flung on the sand,\nyou are lifted\nin the crisp sand\nthat drives in the wind.\n\nCan the spice-rose\ndrip such acrid fragrance\nhardened in a leaf?\"", "H.D.", 8},
   {"and-once-the-storm-is-over", "Kafka on the Shore", "\"And once the storm is over, you won't remember how you made it through, how you managed to survive. You won't even be sure, whether the storm is really over. But one thing is certain. When you come out of the storm, you won't be the same person who walked in. That's what this storm's all about.\"", "Haruki Murakami", 8},
   {"every-one-of-us-is-losing", "Kafka on the Shore", "\"Every one of us is losing something precious to us. Lost opportunities, lost possibilities, feelings we can never get back again. That's part of what it means to be alive.\"", "Haruki Murakami", 8},

@@ -63,19 +63,19 @@ int main() {
   audioInputUpdate();
   assert(audioTestI2s.reads - readsBefore == 8);
   audioTestI2s.repeat = false;
-  audioTestI2s.blocks.push_back(block(0, 655));
+  audioTestI2s.blocks.push_back(block(0, 197));
   update();
-  assert(fabsf(audioInputLevel() - .306f) < .002f); // quiet .02 RMS breath
-  audioTestI2s.blocks.push_back(block(655, 0)); update();
-  assert(fabsf(audioInputLevel() - .306f) < .002f); // either active mono slot
+  assert(fabsf(audioInputLevel() - .135f) < .002f); // light .006 RMS breath
+  audioTestI2s.blocks.push_back(block(197, 0)); update();
+  assert(fabsf(audioInputLevel() - .135f) < .002f); // either active mono slot
   // No data eventually clears stale levels rather than latching a strong blow.
-  update(9); assert(audioInputLevel() > .3f);
+  update(9); assert(audioInputLevel() > .13f);
   update(); assert(audioInputLevel() == 0);
   audioTestI2s.blocks.push_back(block(32767, 0)); update(); assert(audioInputLevel() == 1);
-  audioTestI2s.blocks.push_back(block(65, 0)); update(); assert(audioInputLevel() == 0);
-  audioTestI2s.blocks.push_back(block(0, 98)); update(); assert(audioInputLevel() == 0);
-  audioTestI2s.blocks.push_back(block(163, 0)); update();
-  assert(audioInputLevel() > .03f && audioInputLevel() < .04f);
+  audioTestI2s.blocks.push_back(block(32, 0)); update(); assert(audioInputLevel() == 0);
+  audioTestI2s.blocks.push_back(block(0, 49)); update(); assert(audioInputLevel() == 0);
+  audioTestI2s.blocks.push_back(block(65, 0)); update();
+  assert(audioInputLevel() > .01f && audioInputLevel() < .02f);
 
   const int stopsBefore = audioTestI2s.stops;
   assert(audioInputSetEnabled(false));
@@ -96,7 +96,7 @@ int main() {
   audioInputSetEnabled(false); update();
   assert(audioInputSetEnabled(true)); finishStartup();
   assert(audioInputEnabled() && audioTestI2s.running);
-  audioTestI2s.blocks.push_back(block(655, 0)); update(); assert(audioInputLevel() > .3f);
+  audioTestI2s.blocks.push_back(block(197, 0)); update(); assert(audioInputLevel() > .13f);
 
   audioTestI2s.readResult = ESP_FAIL; update();
   assert(!audioInputAvailable() && !audioInputEnabled() && !audioTestI2s.installed && audioInputLevel() == 0);

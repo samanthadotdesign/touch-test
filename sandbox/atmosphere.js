@@ -12,29 +12,29 @@
     let energy = 0;
     for (const sample of samples) energy += sample * sample;
     // A gentle breath is enough to tap; retain a small floor for quiet rooms.
-    return clamp((Math.sqrt(energy / samples.length) - .003) * 18, 0, 1);
+    return clamp((Math.sqrt(energy / samples.length) - .0015) * 30, 0, 1);
   }
   function smoothLevel(current, target, seconds) {
     const dt = clamp(Number.isFinite(seconds) ? seconds : 0, 0, .1);
-    return current + (target - current) * (1 - Math.exp(-dt / (target > current ? .09 : .65)));
+    return current + (target - current) * (1 - Math.exp(-dt / (target > current ? .018 : .18)));
   }
   function smoothDetectionLevel(current, target, seconds) {
     const dt = clamp(Number.isFinite(seconds) ? seconds : 0, 0, .1);
-    return current + (target - current) * (1 - Math.exp(-dt / (target > current ? .04 : .10)));
+    return current + (target - current) * (1 - Math.exp(-dt / (target > current ? .015 : .06)));
   }
   function motionScale(level, active = false) {
-    return Math.min(5, (active ? 1.25 : 1) + clamp(level, 0, 1) * 3.75);
+    return Math.min(9, (active ? 1.25 : 1) + Math.sqrt(clamp(level, 0, 1)) * 7.75);
   }
 
-  function createBlowGate({threshold = .25, holdSeconds = .12, releaseSeconds = .5, cooldownSeconds = 1.6} = {}) {
-    threshold = clamp(Number.isFinite(threshold) ? threshold : .25, .05, .95);
+  function createBlowGate({threshold = .10, holdSeconds = .06, releaseSeconds = .5, cooldownSeconds = 1.6} = {}) {
+    threshold = clamp(Number.isFinite(threshold) ? threshold : .10, .05, .95);
     let held = 0, quiet = 0, cooldown = 0, armed = true;
     return {
       get threshold() { return threshold; },
       get progress() { return clamp(held / holdSeconds, 0, 1); },
       get armed() { return armed; },
       reset() { held = quiet = cooldown = 0; armed = true; },
-      setThreshold(value) { threshold = clamp(Number.isFinite(value) ? value : .25, .05, .95); held = 0; },
+      setThreshold(value) { threshold = clamp(Number.isFinite(value) ? value : .10, .05, .95); held = 0; },
       update(level, seconds, enabled = true, rawLevel = level) {
         if (!enabled) { this.reset(); return false; }
         const dt = clamp(Number.isFinite(seconds) ? seconds : 0, 0, .1);
@@ -259,7 +259,7 @@
       get theme() { return theme; },
       get colourway() { return colourway; },
       get level() { return level; },
-      get blowForce() { return level; },
+      get blowForce() { return Math.sqrt(clamp(level, 0, 1)); },
       get micActive() { return micState === 'on'; },
       get motionScale() { return motionScale(level, micState === 'on'); },
       open, close, setTheme, toggleMic, stopMic,
