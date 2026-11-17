@@ -20,7 +20,8 @@ key triggers one action. Reading has no timeout.
 The reading body's layout can vary; the poem or book title and author remain
 centred at the bottom, as in the [Figma references](https://www.figma.com/design/nVvkRzyAbBU2QTXQGdhttv/motion?node-id=68-1884).
 Only `workTitle` appears on screen. The collection's `title` stays an editor
-label; untitled quotes show only their author. Long work titles wrap upwards.
+label; untitled quotes show only their author. Work titles stay on one line;
+long titles narrow horizontally to fit, with the author below.
 
 Moving fragments and letters start at 1.36× speed. Reading also offers
 Scattered phrases, Alternating margins, Open field, and Spacious islands from

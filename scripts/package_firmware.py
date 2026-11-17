@@ -54,6 +54,7 @@ def package_firmware(source, target, env):
         "for 0.06 seconds acts like a tap, revealing the poem. Release into quiet "
         "before another sound advances to the next moving poem. "
         "Reading keeps the poem/book title and author centred at the bottom. "
+        "The full title fits on one line, narrowing only when needed. "
         "Database labels stay in the editor; only workTitle is displayed. "
         "Fragment and letter motion starts at 1.36x. Reading includes scattered "
         "and alternating phrase groups with varied near-edge and inset margins.\n",

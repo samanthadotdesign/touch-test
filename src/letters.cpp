@@ -348,15 +348,33 @@ void lettersDraw() {
   if (phase == ASSEMBLING || phase == READING || phase == DISSOLVING) {
     const float opacity = phase == READING ? 1 : phase == ASSEMBLING ? eased : 1 - eased;
     gfx->setTextSize(1);
-    const auto drawFooterLine = [opacity](const char *text, int y) {
-      gfx->setTextColor(atmosphereInk(.4f * opacity, 120, y));
-      gfx->setCursor((LCD_W - (int)strlen(text) * 6) / 2, y);
-      for (const char *c = text; *c; c++) gfx->write((uint8_t)*c);
+    const auto drawFooterLine = [opacity](const char *text, int y, int width) {
+      const int sourceWidth = (int)strlen(text) * 6;
+      const int left = (LCD_W - width) / 2;
+      const uint16_t colour = atmosphereInk(.4f * opacity, 120, y);
+      if (width >= sourceWidth) {
+        gfx->setTextColor(colour);
+        gfx->setCursor(left, y);
+        for (const char *c = text; *c; c++) gfx->write((uint8_t)*c);
+        return;
+      }
+      for (int c = 0; text[c]; c++) for (int col = 0; col < 5; col++) {
+        const int x0 = left + (c * 6 + col) * width / sourceWidth;
+        const int x1 = left + (c * 6 + col + 1) * width / sourceWidth;
+        if (x1 == x0) continue;
+        const uint8_t bits = pgm_read_byte(&font[(uint8_t)text[c] * 5 + col]);
+        for (int row = 0; row < 8;) {
+          if (!(bits & (1 << row))) { row++; continue; }
+          const int first = row;
+          while (row < 8 && (bits & (1 << row))) row++;
+          gfx->fillRect(x0, y + first, x1 - x0, row - first, colour);
+        }
+      }
     };
     const PoetryFooter &footer = current->layout.footer;
-    for (int line = 0; line < footer.count; line++)
-      drawFooterLine(footer.lines[line], footer.top + line * 14);
-    drawFooterLine(current->poem->by, (int)current->layout.authorY);
+    if (footer.count) drawFooterLine(footer.lines[0], footer.top, footer.width);
+    drawFooterLine(current->poem->by, (int)current->layout.authorY,
+                   (int)strlen(current->poem->by) * 6);
   }
 }
 int lettersCount() { return current->count; }

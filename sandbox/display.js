@@ -12,8 +12,11 @@
     function footer(experience,opacity){
       ctx.fillStyle=ink(.4*opacity);
       const {titleLines=[],titleY=281,authorY=295}=experience.arrangement;
-      const line=(text,y)=>{const x=(240-text.length*6)/2;glyphs(text,(gx,gy,w,h)=>ctx.fillRect(Math.trunc(x+gx),Math.trunc(y+gy),w,h));};
-      titleLines.forEach((text,index)=>line(text,titleY+index*14));
+      const line=(text,y,width=text.length*6)=>{
+        const sourceWidth=text.length*6,left=Math.trunc((240-width)/2);
+        glyphs(text,(gx,gy,w,h)=>{const x0=left+Math.floor(gx*width/sourceWidth),x1=left+Math.floor((gx+w)*width/sourceWidth);if(x1>x0)ctx.fillRect(x0,Math.trunc(y+gy),x1-x0,h);});
+      };
+      titleLines.forEach(text=>line(text,titleY,Math.min(228,text.length*6)));
       line(displayText(experience.poem.by),authorY);
     }
     return function render(experience){

@@ -67,15 +67,8 @@
     if(text.length>512||text.trim().split(/\s+/).length>96)throw Error('This poem exceeds the display text limit.');
     title=displayText(title);
     if(title.length>60)throw Error('Titles allow 60 characters.');
-    const titleLines=[];
-    let titleLine='';
-    for(let word of title.trim().split(/\s+/).filter(Boolean)){
-      while(word.length>36){if(titleLine){titleLines.push(titleLine);titleLine='';}titleLines.push(word.slice(0,36));word=word.slice(36);}
-      if(titleLine&&titleLine.length+1+word.length>36){titleLines.push(titleLine);titleLine='';}
-      titleLine+=(titleLine?' ':'')+word;
-    }
-    if(titleLine)titleLines.push(titleLine);
-    const authorY=295,titleY=281-Math.max(0,titleLines.length-1)*14;
+    const titleLine=title.trim().replace(/\s+/g,' '),titleLines=titleLine?[titleLine]:[];
+    const titleWidth=Math.min(228,titleLine.length*6),authorY=295,titleY=281;
     const footerTop=titleLines.length?titleY:authorY,bodyTop=4,bodyBottom=footerTop-16;
     const phraseTemplate=READING_LAYOUTS.find(template=>template.key===readingLayout);
     const size=1,advance=6,lines=[[]];let width=0,sourceOffset=0;
@@ -135,7 +128,7 @@
     }
     const letters=[];
     for(const word of words){word.x-=120;word.y-=160;for(let c=0;c<word.text.length;c++)letters.push({text:word.text[c],size,width:6,x:word.x-word.width/2+c*6+3,y:word.y,line:word.line,sourceOffset:word.sourceOffset+c});}
-    return {words,letters,authorY,titleLines,titleY,footerTop,bodyBottom,size,layoutName:readingLayout,text};
+    return {words,letters,authorY,titleLines,titleWidth,titleY,footerTop,bodyBottom,size,layoutName:readingLayout,text};
   }
   function particleRandom(seed,index,channel){
     let x=(seed^Math.imul(index+1,0x9e3779b9)^Math.imul(channel+1,0x85ebca6b))>>>0;

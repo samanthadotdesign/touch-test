@@ -110,7 +110,7 @@ globalThis.POETRY_DATA = {
       "id": "sea-rose",
       "title": "Sea Rose",
       "workTitle": "Sea Rose",
-      "text": "\"Rose, harsh rose,\nmarred and with stint of petals,\nmeagre flower, thin,\nsparse of leaf,\n\nmore precious\nthan a wet rose\nsingle on a stem-\nyou are caught in the drift.\n\nStunted, with small leaf,\nyou are flung on the sand,\nyou are lifted\nin the crisp sand\nthat drives in the wind.\n\nCan the spice-rose\ndrip such acrid fragrance\nhardened in a leaf?\"",
+      "text": "Rose, harsh rose,\nmarred and with stint of petals,\nmeagre flower, thin,\nsparse of leaf,\n\nmore precious\nthan a wet rose\nsingle on a stem-\nyou are caught in the drift.\n\nStunted, with small leaf,\nyou are flung on the sand,\nyou are lifted\nin the crisp sand\nthat drives in the wind.\n\nCan the spice-rose\ndrip such acrid fragrance\nhardened in a leaf?",
       "by": "H.D.",
       "layout": "random"
     },
@@ -241,7 +241,7 @@ globalThis.POETRY_DATA = {
 
 globalThis.POETRY_READING_LAYOUTS = [{"id":13,"key":"scattered-phrases","label":"Scattered phrases","nodeId":"68:1886","boxes":[{"x":15,"y":22,"width":97,"rows":2,"weight":6},{"x":130,"y":50,"width":104,"rows":2,"weight":5},{"x":15,"y":92,"width":150,"rows":2,"weight":8},{"x":48,"y":138,"width":163,"rows":2,"weight":12},{"x":88,"y":182,"width":48,"rows":1,"weight":2},{"x":112,"y":211,"width":114,"rows":1,"weight":5},{"x":36,"y":243,"width":93,"rows":2,"weight":6}]},{"id":14,"key":"alternating-phrases","label":"Alternating margins","nodeId":"68:1889","boxes":[{"x":119,"y":12,"width":108,"rows":2,"weight":6},{"x":10,"y":44,"width":134,"rows":2,"weight":8},{"x":119,"y":76,"width":115,"rows":2,"weight":5},{"x":10,"y":100,"width":78,"rows":2,"weight":5},{"x":119,"y":119,"width":115,"rows":2,"weight":6},{"x":10,"y":160,"width":109,"rows":2,"weight":5},{"x":119,"y":175,"width":115,"rows":2,"weight":7},{"x":10,"y":207,"width":109,"rows":3,"weight":9},{"x":119,"y":235,"width":115,"rows":2,"weight":6}]},{"id":15,"key":"open-phrases","label":"Open field","nodeId":"68:1916","boxes":[{"x":12,"y":18,"width":108,"rows":1,"weight":2},{"x":31,"y":41,"width":108,"rows":1,"weight":4},{"x":125,"y":136,"width":108,"rows":2,"weight":5},{"x":47,"y":234,"width":155,"rows":1,"weight":5}]},{"id":16,"key":"inset-phrases","label":"Spacious islands","nodeId":"68:1934","boxes":[{"x":85,"y":92,"width":81,"rows":2,"weight":6},{"x":53,"y":150,"width":108,"rows":2,"weight":5},{"x":116,"y":214,"width":90,"rows":2,"weight":5}]}];
 
-globalThis.POETRY_SOURCE_REVISION = "f3c1522d3fa011b3c04362e51725efe727bf1e8dbaee1b4d2b03ba5cf1bf4275";
+globalThis.POETRY_SOURCE_REVISION = "85c4e2141a5c5a28af317fb03c7cdf4c378196b2d050d006a534306bab41ba56";
 
 /* ASCII font from Adafruit GFX; see data/font5x7.json for provenance.
 Software License Agreement (BSD License)

@@ -59,7 +59,7 @@ Every restart opens Colour fields with a different starting colourway from the p
 
 Check that Night is dark with white text and Paper is light with black text. The ES3C28P IPS panel needs the manufacturer's normal-colour inversion setting (`INVON`, `0x21`), applied directly to the screen even when drawing through the canvas. Earlier builds used the generic panel default, which can reverse dark/light themes and turn warm colours blue or cyan. The firmware now selects the IPS panel mode; palette values and RGB565 byte order stay the same. See the [manufacturer's initialization code](https://www.lcdwiki.com/res/ES3C28P/ILI9341V_Init.txt).
 
-In reading, check that the title and author stay centred at the bottom across different body layouts. Untitled entries keep just the author; long titles wrap above it. The title's final line is at y=281 and the author is at y=295, matching the [Figma references](https://www.figma.com/design/nVvkRzyAbBU2QTXQGdhttv/motion?node-id=68-1884).
+In reading, check that the title and author stay centred at the bottom across different body layouts. Untitled entries keep just the author. The full title stays on one line at y=281, narrowing horizontally only when it exceeds 228 px; the author stays at y=295. Their anchors match the [Figma references](https://www.figma.com/design/nVvkRzyAbBU2QTXQGdhttv/motion?node-id=68-1884).
 
 Fragment and letter motion now starts at 1.36× nominal speed. Random reading includes four phrase compositions from the [layout references](https://www.figma.com/design/nVvkRzyAbBU2QTXQGdhttv/motion?node-id=68-1885), using both near-edge and spacious inset margins. The title and author keep their bottom-centre anchors.
 

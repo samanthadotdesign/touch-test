@@ -6,15 +6,19 @@
 class Arduino_GFX {
  public:
   struct Glyph { uint8_t ch; int16_t x, y; uint16_t color; };
+  struct Rectangle { int16_t x, y, width, height; uint16_t color; };
   std::vector<Glyph> glyphWrites;
+  std::vector<Rectangle> rectangleWrites;
+  bool captureRectangles = false;
   int triangles = 0, glyphs = 0, visibleTriangles = 0;
   int rectangles = 0;
   int16_t cursorX = 0, cursorY = 0;
   uint8_t textSize = 1;
   uint16_t textColor = 0xffff;
   void fillScreen(uint16_t) { glyphWrites.clear(); }
-  void fillRect(int16_t, int16_t, int16_t w, int16_t h, uint16_t) {
+  void fillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color) {
     assert(w >= 0 && h >= 0); rectangles++;
+    if (captureRectangles) rectangleWrites.push_back({x, y, w, h, color});
   }
   void fillRoundRect(int16_t x, int16_t y, int16_t w, int16_t h, int16_t, uint16_t color) {
     fillRect(x, y, w, h, color);

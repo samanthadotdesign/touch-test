@@ -10,6 +10,7 @@
 #include "poetry_motion.h"
 #include "atmosphere.h"
 #include <Preferences.h>
+#include <font/glcdfont.h>
 
 uint32_t nowMs = 0;
 bool fingerDown = false;
@@ -25,7 +26,9 @@ long random(long upper) { return forcedRandom >= 0 ? forcedRandom % upper : rand
 void randomSeed(unsigned long seed) { srand(seed); }
 void displayBegin() {}
 void displayFlush() {}
-uint16_t *displayFramebuffer() { testGfx.glyphWrites.clear(); return nullptr; }
+uint16_t *displayFramebuffer() {
+  testGfx.glyphWrites.clear(); testGfx.rectangleWrites.clear(); return nullptr;
+}
 void displayCenter(const char *, int16_t, uint8_t, uint16_t, uint16_t) {}
 void touchBegin() {}
 bool touchRead(int16_t &x, int16_t &y) { x = touchX; y = touchY; return fingerDown; }
@@ -68,6 +71,28 @@ void assertBodyClearsFooter(const PoetryLayout &layout) {
     assert(layout.words[i].y + 160 + 4 <= layout.footer.top - 16 + .001f);
   }
 }
+void assertSqueezedTitle(const char *text, float fade = 1) {
+  bool pixels[8][240] = {};
+  int rectangles = 0;
+  for (const auto &rect : testGfx.rectangleWrites) {
+    if (rect.width != 1 || rect.y < 281 || rect.y >= 289) continue;
+    assert(rect.x >= 6 && rect.x + rect.width <= 234);
+    assert(rect.height > 0 && rect.y + rect.height <= 289);
+    assert(rect.color == atmosphereInk(.4f * fade, 120, 281));
+    for (int y = rect.y; y < rect.y + rect.height; y++) pixels[y - 281][rect.x] = true;
+    rectangles++;
+  }
+  assert(rectangles > 0);
+  const int sourceWidth = strlen(text) * 6;
+  // Sample the source bitmap inversely for each destination column, including
+  // spaces and inter-glyph gaps, to check the full one-row resize independently.
+  for (int x = 0; x < 228; x++) {
+    const int source = ((x + 1) * sourceWidth + 227) / 228 - 1;
+    const int column = source % 6;
+    const uint8_t bits = column < 5 ? pgm_read_byte(&font[(uint8_t)text[source / 6] * 5 + column]) : 0;
+    for (int y = 0; y < 8; y++) assert(pixels[y][x + 6] == bool(bits & (1 << y)));
+  }
+}
 void footerLayoutAndRendering() {
   const char *body = "A small light\nleans into dusk.\nThe room remembers\nhow to be still.";
   const std::string longTitle = std::string(20, 'a') + " " + std::string(20, 'b') + " "
@@ -75,19 +100,29 @@ void footerLayoutAndRendering() {
   const std::string longAuthor(35, 'd');
   PoetryLayout layout, untitled;
   assert(poetryLayout(body, layout, 0, longTitle.c_str()));
-  assert(layout.footer.count == 3 && layout.footer.top == 253);
-  assert(strcmp(layout.footer.lines[0], std::string(20, 'a').c_str()) == 0);
-  assert(strcmp(layout.footer.lines[1], std::string(20, 'b').c_str()) == 0);
-  assert(strcmp(layout.footer.lines[2], std::string(18, 'c').c_str()) == 0);
+  assert(layout.footer.count == 1 && layout.footer.top == 281 && layout.footer.width == 228);
+  assert(strcmp(layout.footer.lines[0], longTitle.c_str()) == 0);
   assertBodyClearsFooter(layout);
   assert(poetryLayout(body, layout, 0, std::string(60, 'w').c_str()));
-  assert(layout.footer.count == 2 && layout.footer.top == 267);
-  assert(strlen(layout.footer.lines[0]) == 36 && strlen(layout.footer.lines[1]) == 24);
+  assert(layout.footer.count == 1 && layout.footer.top == 281 && layout.footer.width == 228);
+  assert(strlen(layout.footer.lines[0]) == 60);
+  assert(poetryLayout(body, layout, 0, "  Book \t title\n"));
+  assert(strcmp(layout.footer.lines[0], "Book title") == 0 && layout.footer.width == 60);
   assert(!poetryLayout(body, layout, 0, std::string(61, 'w').c_str()));
   assert(poetryLayout(body, layout, 0, "  \t\n "));
   assert(layout.footer.count == 0 && layout.footer.top == 295);
 
   MotionPreset whole = MOTIONS[0]; whole.unit = 1;
+  const char *realTitle = "The Paper Menagerie and Other Stories";
+  assert(strlen(realTitle) == 37);
+  assert(poetryLayout(body, layout, 0, realTitle));
+  assert(layout.footer.count == 1 && layout.footer.width == 222 && layout.footer.top == 281);
+  Poem realPoem = {"real-title", realTitle, body, "Ken Liu", 0};
+  assert(lettersLoadPoem(realPoem, whole));
+  lettersAssemble(); lettersUpdate(.55f); lettersDraw();
+  assertFooterRow(realTitle, 281);
+  assertFooterRow("Ken Liu", 295);
+  assert(testGfx.glyphWrites[testGfx.glyphWrites.size() - 37 - 7].x == 9);
   for (uint8_t choice = 0; choice <= 12; choice++) {
     if (choice == 8) continue;
     assert(poetryLayout(body, untitled, choice));
@@ -119,7 +154,7 @@ void footerLayoutAndRendering() {
     first = fminf(first, layout.words[i].y);
     last = fmaxf(last, layout.words[i].y);
   }
-  assert(fabsf(last - first - 225) < .001f); // taller spatial forms tighten only their centres
+  assert(fabsf(last - first - 240) < .001f); // title length never changes body clearance
 
   // Keep every verse row, including blank stanzas, with the longest footer.
   std::string verse = "word";
@@ -137,12 +172,12 @@ void footerLayoutAndRendering() {
   Poem longPoem = {"long-footer", longTitle.c_str(), verse.c_str(), longAuthor.c_str(), 0};
   assert(lettersLoadPoem(longPoem, whole));
   assert(lettersInfo().realParticles == 22);
-  lettersAssemble(); lettersUpdate(.55f); lettersDraw();
-  PoetryFooter footer;
-  assert(poetryFooter(longTitle.c_str(), footer));
-  for (int row = 0; row < 3; row++) assertFooterRow(footer.lines[row], 253 + row * 14);
+  lettersAssemble(); lettersUpdate(.55f);
+  testGfx.captureRectangles = true; lettersDraw();
+  assertSqueezedTitle(longTitle.c_str());
+  testGfx.captureRectangles = false;
   assertFooterRow(longAuthor.c_str(), 295);
-  assert(testGfx.glyphWrites.size() == 22 * 4 + 58 + 35);
+  assert(testGfx.glyphWrites.size() == 22 * 4 + 35); // squeezed titles use bitmap columns
 
   // Both metadata rows share their fixed positions and fade through each theme.
   for (int theme = ATM_NIGHT; theme <= ATM_COLOUR; theme++) {
@@ -162,6 +197,17 @@ void footerLayoutAndRendering() {
     poem.title = "";
     assert(lettersLoadPoem(poem, whole)); lettersAssemble(); lettersUpdate(.55f); lettersDraw();
     assertFooterRow("", 281); assertFooterRow("Author", 295);
+
+    poem.title = longTitle.c_str();
+    assert(lettersLoadPoem(poem, whole)); lettersAssemble(); lettersUpdate(.275f);
+    testGfx.captureRectangles = true; lettersDraw();
+    assertSqueezedTitle(longTitle.c_str(), .5f); assertFooterRow("Author", 295, .5f);
+    lettersUpdate(.275f); lettersDraw();
+    assertSqueezedTitle(longTitle.c_str()); assertFooterRow("Author", 295);
+    assert(lettersPrepareNext(poem, whole)); lettersDissolve();
+    lettersUpdate(.325f); lettersDraw();
+    assertSqueezedTitle(longTitle.c_str(), .5f); assertFooterRow("Author", 295, .5f);
+    testGfx.captureRectangles = false;
   }
   atmosphereSetTheme(ATM_COLOUR);
 }

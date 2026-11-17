@@ -6,12 +6,14 @@
 
 constexpr int POETRY_MAX_WORDS = 96;
 constexpr int POETRY_MAX_CHARS = 512;
-constexpr int POETRY_TITLE_WIDTH = 36;
-constexpr int POETRY_TITLE_LINES = 3;
+constexpr int POETRY_TITLE_WIDTH = 60;
+constexpr int POETRY_TITLE_LINES = 1;
+constexpr int POETRY_TITLE_MAX_PIXELS = 228;
 struct PoetryFooter {
   char lines[POETRY_TITLE_LINES][POETRY_TITLE_WIDTH + 1] = {};
   uint8_t count = 0;
   int top = 295;
+  int width = 0;
 };
 
 inline bool poetryFooter(const char *title, PoetryFooter &out) {
@@ -20,33 +22,21 @@ inline bool poetryFooter(const char *title, PoetryFooter &out) {
   const size_t length = strlen(title);
   if (length > 60) return false;
   int used = 0;
-  for (size_t p = 0; p < length;) {
+  bool gap = false;
+  for (size_t p = 0; p < length; p++) {
     if (title[p] == ' ' || title[p] == '\n' || title[p] == '\r' || title[p] == '\t') {
-      p++; continue;
+      gap = used > 0; continue;
     }
-    const size_t start = p;
-    while (p < length && title[p] != ' ' && title[p] != '\n'
-           && title[p] != '\r' && title[p] != '\t') {
-      if (title[p] < 32 || title[p] > 126) return false;
-      p++;
-    }
-    size_t offset = start;
-    while (offset < p) {
-      const size_t remaining = p - offset;
-      const int chunk = remaining > POETRY_TITLE_WIDTH ? POETRY_TITLE_WIDTH : (int)remaining;
-      if (!out.count) out.count = 1;
-      if (used && used + 1 + chunk > POETRY_TITLE_WIDTH) {
-        if (out.count >= POETRY_TITLE_LINES) return false;
-        out.count++; used = 0;
-      }
-      if (used) out.lines[out.count - 1][used++] = ' ';
-      memcpy(out.lines[out.count - 1] + used, title + offset, chunk);
-      used += chunk;
-      out.lines[out.count - 1][used] = '\0';
-      offset += chunk;
-    }
+    if (title[p] < 32 || title[p] > 126) return false;
+    if (gap) out.lines[0][used++] = ' ';
+    out.lines[0][used++] = title[p];
+    gap = false;
   }
-  if (out.count) out.top = 281 - (out.count - 1) * 14;
+  if (used) {
+    out.count = 1;
+    out.top = 281;
+    out.width = used * 6 > POETRY_TITLE_MAX_PIXELS ? POETRY_TITLE_MAX_PIXELS : used * 6;
+  }
   return true;
 }
 struct PoetryWord {

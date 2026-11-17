@@ -223,10 +223,9 @@ test('all twelve layouts keep fixed optional work-title and author footer anchor
  for(const mode of LAYOUTS.slice(0,12))for(const title of ['', 'Actual Work Title',longTitle]){
   const a=layout(text,mode,title),untitled=layout(text,mode);
   assert.equal(a.authorY,295,mode);assert.equal(a.footerTop,a.titleLines.length?a.titleY:295);
-  assert.equal(a.titleLines.length,title===longTitle?3:title?1:0);
-  if(title)assert.equal(a.titleY+(a.titleLines.length-1)*14,281);
-  assert.ok(a.titleLines.every(line=>line.length<=36));
-  assert.equal(a.titleLines.join('').replace(/\s/g,''),title.replace(/\s/g,''));
+  assert.equal(a.titleLines.length,title?1:0);assert.equal(a.titleY,281);
+  assert.equal(a.titleWidth,Math.min(228,title.length*6));
+  assert.deepEqual(a.titleLines,title?[title]:[]);
   assert.deepEqual(a.words.map(w=>w.x),untitled.words.map(w=>w.x),`${mode} retains horizontal composition`);
   assert.equal(a.letters.map(letter=>letter.text).join(''),text.replace(/\s/g,''));
   for(const word of a.words){assert.ok(word.y+160-4>=4-1e-8,`${mode} top`);assert.ok(word.y+160+4<=a.footerTop-16+1e-8,`${mode} footer collision`);assert.equal(word.size,1);}
@@ -234,23 +233,26 @@ test('all twelve layouts keep fixed optional work-title and author footer anchor
  const short=layout('one\ntwo\nthree','centered');
  assert.deepEqual(layout('one\ntwo\nthree','centered','A title').words,short.words,'short clear bodies keep their original positions');
  assert.deepEqual(layout('body','centered','   ').titleLines,[]);
- assert.deepEqual(layout('body','centered','x'.repeat(60)).titleLines,['x'.repeat(36),'x'.repeat(24)]);
- assert.deepEqual(layout('body','centered','a'.repeat(22)+' '+'b'.repeat(37)).titleLines,['a'.repeat(22),'b'.repeat(36),'b']);
+ assert.deepEqual(layout('body','centered','x'.repeat(60)).titleLines,['x'.repeat(60)]);
+ assert.deepEqual(layout('body','centered','  An\n actual\t title  ').titleLines,['An actual title']);
+ const book=layout('body','centered','The Paper Menagerie and Other Stories');
+ assert.equal(book.titleLines[0].length,37);assert.equal(book.titleWidth,222);assert.equal((240-book.titleWidth)/2,9);
+ const aliases=layout('body','centered','A\u2026B');assert.deepEqual(aliases.titleLines,['A...B']);assert.equal(aliases.titleWidth,30);
 });
-test('three-line work titles fit legacy22-line verse without losing characters or increasing capacity',()=>{
+test('one-line work titles preserve legacy22-line verse spacing and footer clearance without increasing capacity',()=>{
  const title='A'.repeat(20)+' '+'B'.repeat(20)+' '+'C'.repeat(18),text=Array(22).fill('word').join('\n');
  for(const mode of ['centered','left','stepped','stepped-reverse','stepped-zigzag']){
-  const a=layout(text,mode,title);assert.equal(a.titleY,253);assert.equal(a.authorY,295);
+  const a=layout(text,mode,title);assert.equal(a.titleY,281);assert.equal(a.authorY,295);
   assert.equal(a.words.length,22);assert.equal(a.letters.map(letter=>letter.text).join(''),'word'.repeat(22));
-  close(a.words[0].y+160-4,4);close(a.words.at(-1).y+160+4,237);
-  for(let i=1;i<a.words.length;i++)assert.ok(a.words[i].y-a.words[i-1].y>=10);
+  close(a.words[0].y+160-4,5);close(a.words.at(-1).y+160+4,265);
+  for(let i=1;i<a.words.length;i++)close(a.words[i].y-a.words[i-1].y,12);
   assert.throws(()=>layout(Array(23).fill('word').join('\n'),mode,title));
  }
  const spatial=Array(12).fill('a b c').join('\n'),before=layout(spatial,'constellation'),after=layout(spatial,'constellation',title);
  const beforeMin=Math.min(...before.words.map(w=>w.y)),beforeSpan=Math.max(...before.words.map(w=>w.y))-beforeMin;
  const afterMin=Math.min(...after.words.map(w=>w.y)),afterSpan=Math.max(...after.words.map(w=>w.y))-afterMin;
- close(afterSpan,225);assert.ok(beforeSpan>afterSpan);
- before.words.forEach((word,index)=>{assert.equal(after.words[index].x,word.x);close((after.words[index].y-afterMin)/afterSpan,(word.y-beforeMin)/beforeSpan);});
+ close(afterSpan,240);close(beforeSpan,afterSpan);
+ before.words.forEach((word,index)=>{assert.equal(after.words[index].x,word.x);close(after.words[index].y-word.y,afterMin-beforeMin);});
 });
 test('workTitle stays separate from the library label and is validated without losing source punctuation',()=>{
  const data=clone();data.poems=[{...data.poems[0],title:'Private library label'}];delete data.poems[0].workTitle;
@@ -271,17 +273,22 @@ test('the bitmap renderer centres the actual work title at281 and author at295 w
  for(const name of ['clearRect','beginPath','lineTo','moveTo','closePath','fill'])ctx[name]=()=>{};
  ctx.fillRect=(x,y,w,h)=>draws.push({x,y,w,h,style:ctx.fillStyle});
  const expectedPixels=lines=>{
-  const pixels=new Set();for(const [text,y] of lines){const x=(240-text.length*6)/2;for(let c=0;c<text.length;c++)for(let col=0;col<5;col++)for(let row=0;row<8;row++)if(font[text.charCodeAt(c)-32][col]&(1<<row))pixels.add(Math.trunc(x+c*6+col)+','+Math.trunc(y+row));}return pixels;
+  const pixels=new Set();for(const [text,y,width=text.length*6] of lines){const sourceWidth=text.length*6,left=Math.trunc((240-width)/2);for(let c=0;c<text.length;c++)for(let col=0;col<5;col++)for(let row=0;row<8;row++)if(font[text.charCodeAt(c)-32][col]&(1<<row)){const gx=c*6+col,x0=left+Math.floor(gx*width/sourceWidth),x1=left+Math.floor((gx+1)*width/sourceWidth);for(let x=x0;x<x1;x++)pixels.add(x+','+Math.trunc(y+row));}}return pixels;
  };
  const pixelsFor=style=>{const pixels=new Set();for(const draw of draws.filter(draw=>draw.style===style))for(let x=draw.x;x<draw.x+draw.w;x++)for(let y=draw.y;y<draw.y+draw.h;y++)pixels.add(x+','+y);return pixels;};
  const longTitle='A'.repeat(20)+' '+'B'.repeat(20)+' '+'C'.repeat(18);
- for(const theme of ['dark','light','colour'])for(const title of ['', 'Actual Work',longTitle]){
+ const realBook='The Paper Menagerie and Other Stories';
+ for(const theme of ['dark','light','colour'])for(const title of ['', 'Actual Work',realBook,longTitle,'W'.repeat(60)]){
   const data=clone();data.poems=[{...data.poems[0],title:'Hidden label',workTitle:title,by:'Reader'}];
   const e=new Experience(data,()=>0),render=environment.module.exports.createRenderer({getContext:()=>ctx},font,{transparent:true,getTheme:()=>theme});
   draws.length=0;render(e);assert.equal(draws.length,0,'moving fragments have no footer');
   e.touch();advance(e,.6);draws.length=0;render(e);
-  const ink=theme==='dark'?'255,255,255':'0,0,0',lines=e.arrangement.titleLines.map((text,index)=>[text,e.arrangement.titleY+index*14]);lines.push(['Reader',295]);
+  const ink=theme==='dark'?'255,255,255':'0,0,0',lines=e.arrangement.titleLines.map(text=>[text,281,Math.min(228,text.length*6)]);lines.push(['Reader',295]);
   assert.deepEqual(pixelsFor(`rgba(${ink},0.4)`),expectedPixels(lines));
+  const titleDraws=draws.filter(draw=>draw.style===`rgba(${ink},0.4)`&&draw.y>=281&&draw.y<289);
+  if(title){assert.deepEqual(e.arrangement.titleLines,[title]);assert.ok(titleDraws.length>0);for(const draw of titleDraws){assert.ok(draw.x>=6);assert.ok(draw.x+draw.w<=234);assert.ok(draw.y+draw.h<=289);}}
+  if(title===realBook){assert.equal(e.arrangement.titleWidth,222);assert.deepEqual(expectedPixels([[title,281,222]]),expectedPixels([[title,281]]),'the37-character book keeps normal glyphs at x9');}
+  if(title.length===60)assert.equal(e.arrangement.titleWidth,228,'all60 title characters fit one row');
   if(!title)assert.ok(draws.filter(draw=>draw.style===`rgba(${ink},0.4)`).every(draw=>draw.y>=295),'empty actual work title has no placeholder');
   e.touch();advance(e,.2);draws.length=0;render(e);
   const opacity=.4*(1-e.layers()[0].progress);assert.deepEqual(pixelsFor(`rgba(${ink},${opacity})`),expectedPixels(lines));
